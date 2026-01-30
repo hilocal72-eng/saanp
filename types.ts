@@ -1,5 +1,5 @@
 
-export type Gender = 'male' | 'female' | 'other';
+export type Gender = 'male' | 'female';
 
 export interface UserProfile {
   id?: string;
@@ -7,6 +7,7 @@ export interface UserProfile {
   name: string;
   age: number;
   gender: Gender;
+  lastSeen?: number; // Timestamp
 }
 
 export interface Friend {
@@ -14,6 +15,9 @@ export interface Friend {
   name: string;
   uniqueId: string;
   status: 'pending' | 'accepted';
+  lastSeen?: number;
+  unreadCount?: number;
+  lastMessageTimestamp?: number;
 }
 
 export interface ChatMessage {
@@ -25,6 +29,7 @@ export interface ChatMessage {
 }
 
 export interface GameState {
+  id?: string;
   code: string;
   hostId: string;
   guestId?: string;

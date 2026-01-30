@@ -31,15 +31,44 @@ export const BOARD_CELLS = 100;
 
 /**
  * AIRTABLE CONFIGURATION
- * Using the corrected credentials provided by the user.
- * The Base ID was previously truncated, causing 404 errors.
+ * 
+ * REQUIRED SCHEMA (Create these tables in your Airtable base):
+ * 
+ * Users Table:
+ * - name (Single line text)
+ * - age (Number)
+ * - gender (Single line text)
+ * - lastSeen (Number)
+ * 
+ * Friends Table:
+ * - user1Id (Single line text)
+ * - user2Id (Single line text)
+ * - status (Single line text)
+ * 
+ * Messages Table:
+ * - senderId (Single line text)
+ * - receiverId (Single line text)
+ * - text (Long text)
+ * - timestamp (Number)
+ * 
+ * Games Table:
+ * - code (Single line text)
+ * - hostId (Single line text)
+ * - guestId (Single line text)
+ * - hostPos (Number)
+ * - guestPos (Number)
+ * - turn (Single line text)
+ * - winner (Single line text)
+ * - lastDice (Number)
+ * - lastUpdated (Number)
  */
 export const AIRTABLE_CONFIG = {
   API_KEY: "pat9zUDjx4nzVLsG8.6b1c84f72870eab1f2c3f5dacc26103ab6c96f1a8c3981bc2b181948cdc6e6c1",
-  BASE_ID: "appYYxC9Aeb0DIodj", // Updated with the suffix 'j'
+  BASE_ID: "appYYxC9Aeb0DIodj",
   TABLES: {
-    USERS: "tblW5FiPcwVOU6rTg", // Specific table ID for Users
-    FRIENDS: "Friends",         // Table name for Friends
-    MESSAGES: "Messages"        // Table name for Messages
+    USERS: "Users",
+    FRIENDS: "Friends",
+    MESSAGES: "Messages",
+    GAMES: "Games"
   }
 };

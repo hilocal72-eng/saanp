@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Friend, UserProfile, ChatMessage } from '../types';
 import { dbService } from '../services/dbService';
-import { UserPlus, MessageCircle, ArrowLeft, Send, Users, Bell, Loader2, Sparkles } from 'lucide-react';
+import { UserPlus, MessageCircle, ArrowLeft, Send, Users, Bell, Loader2, Sparkles, Search } from 'lucide-react';
 
 interface FriendsTabProps {
   myProfile: UserProfile;
@@ -18,6 +18,12 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Track unread timestamps locally
+  const [lastReadTimes, setLastReadTimes] = useState<Record<string, number>>(() => {
+    const saved = localStorage.getItem(`read_times_${myProfile.uniqueId}`);
+    return saved ? JSON.parse(saved) : {};
+  });
+
   useEffect(() => {
     refreshFriends();
     const interval = setInterval(refreshFriends, 5000);
@@ -25,25 +31,51 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
   }, [myProfile.name, activeChat?.uniqueId]);
 
   useEffect(() => {
+    if (activeChat) {
+      const now = Date.now();
+      setLastReadTimes(prev => {
+        const next = { ...prev, [activeChat.uniqueId]: now };
+        localStorage.setItem(`read_times_${myProfile.uniqueId}`, JSON.stringify(next));
+        return next;
+      });
+    }
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, activeChat]);
 
   const refreshFriends = async () => {
     try {
       const list = await dbService.getFriends(myProfile.name);
-      setFriends(list);
       
-      // If we are currently in a chat, fetch messages for that specific user
+      // Calculate unread status for each friend
+      const friendsWithMeta = await Promise.all(list.map(async (f) => {
+        const msgs = await dbService.getMessages(myProfile.name, f.uniqueId);
+        const lastMsg = msgs[msgs.length - 1];
+        const lastRead = lastReadTimes[f.uniqueId] || 0;
+        
+        return {
+          ...f,
+          lastMessageTimestamp: lastMsg?.timestamp || 0,
+          unreadCount: (lastMsg && lastMsg.senderId !== myProfile.name && lastMsg.timestamp > lastRead) ? 1 : 0
+        };
+      }));
+
+      setFriends(friendsWithMeta);
+      
       if (activeChat) {
          const msgs = await dbService.getMessages(myProfile.name, activeChat.uniqueId);
          setMessages(prev => {
-           // Only update state if the messages actually changed to prevent jitter
            if (JSON.stringify(prev) !== JSON.stringify(msgs)) return msgs;
            return prev;
          });
+         
+         // Update chat context if friend profile changed (e.g. online status)
+         const updatedActiveFriend = friendsWithMeta.find(f => f.uniqueId === activeChat.uniqueId);
+         if (updatedActiveFriend && updatedActiveFriend.lastSeen !== activeChat.lastSeen) {
+           setActiveChat(updatedActiveFriend);
+         }
       }
     } catch (e) {
-      console.warn("Sync error - retrying...");
+      console.warn("Sync error...");
     }
   };
 
@@ -54,15 +86,21 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
       alert("You cannot add yourself.");
       return;
     }
+    
     setSearching(true);
-    const success = await dbService.sendFriendRequest(myProfile.name, trimmed);
-    setSearching(false);
-    if (success) {
-      alert('Request sent to @' + trimmed);
-      setTargetUsername('');
-      refreshFriends();
-    } else {
-      alert('User not found. Ensure they have created a profile.');
+    try {
+      const success = await dbService.sendFriendRequest(myProfile.name, trimmed);
+      if (success) {
+        alert('Friend request sent!');
+        setTargetUsername('');
+        refreshFriends();
+      } else {
+        alert('Player not found');
+      }
+    } catch (error) {
+      alert('Player not found');
+    } finally {
+      setSearching(false);
     }
   };
 
@@ -82,14 +120,19 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
       timestamp: Date.now()
     };
     
-    // Optimistic Update: Add to local state first
     setMessages(prev => [...prev, msg]);
     setNewMsg('');
     
     try {
       await dbService.sendMessage(msg);
+      // Mark as read immediately when I send a message
+      setLastReadTimes(prev => {
+        const next = { ...prev, [activeChat.uniqueId]: Date.now() };
+        localStorage.setItem(`read_times_${myProfile.uniqueId}`, JSON.stringify(next));
+        return next;
+      });
     } catch (e) {
-      console.error("Failed to send message to Airtable");
+      console.error("Message delivery failed");
     } finally {
       setSending(false);
     }
@@ -99,10 +142,12 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
   const activeFriends = friends.filter(f => f.status === 'accepted' || (f.status === 'pending' && !f.isIncoming));
 
   if (activeChat) {
+    const isFriendOnline = activeChat.lastSeen && (Date.now() - activeChat.lastSeen < 60000);
+    
     return (
       <div className="flex flex-col h-[100dvh] bg-slate-950 animate-in slide-in-from-right-full duration-300">
         <div className="flex items-center px-6 py-4 border-b border-white/5 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
-          <button onClick={() => setActiveChat(null)} className="p-2 -ml-2 text-slate-500 hover:text-white transition-colors">
+          <button onClick={() => setActiveChat(null)} className="p-2 -ml-2 text-slate-400 hover:text-white transition-colors">
             <ArrowLeft size={20} />
           </button>
           <div className="ml-2 flex items-center gap-3">
@@ -111,19 +156,25 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
             </div>
             <div>
               <h2 className="font-black text-white text-sm leading-none">{activeChat.name}</h2>
-              <span className="text-[8px] text-emerald-500 font-black uppercase tracking-widest flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
-                Connection Established
-              </span>
+              {isFriendOnline ? (
+                <span className="text-[8px] text-emerald-400 font-black uppercase tracking-widest flex items-center gap-1 mt-1">
+                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                  Active
+                </span>
+              ) : (
+                <span className="text-[8px] text-slate-500 font-black uppercase tracking-widest flex items-center gap-1 mt-1">
+                  Away
+                </span>
+              )}
             </div>
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-4 pb-48">
           {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center opacity-20">
-              <Sparkles size={48} className="mb-4" />
-              <p className="font-black text-[10px] uppercase tracking-widest">Start the conversation</p>
+            <div className="h-full flex flex-col items-center justify-center text-center opacity-30">
+              <Sparkles size={48} className="mb-4 text-indigo-400" />
+              <p className="font-black text-[10px] uppercase tracking-widest text-slate-300">Say hello!</p>
             </div>
           ) : (
             messages.map((m) => {
@@ -133,7 +184,7 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
                   <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-xs font-bold ${
                     isMe 
                     ? 'bg-indigo-600 text-white rounded-tr-none shadow-lg shadow-indigo-950/20' 
-                    : 'bg-slate-900 text-slate-300 rounded-tl-none border border-slate-800'
+                    : 'bg-slate-900 text-slate-100 rounded-tl-none border border-slate-800'
                   }`}>
                     {m.text}
                   </div>
@@ -150,8 +201,8 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
             value={newMsg}
             onChange={(e) => setNewMsg(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-            placeholder="TYPE YOUR MESSAGE..."
-            className="flex-1 bg-transparent py-3 px-4 text-[10px] font-black uppercase outline-none text-white placeholder:text-slate-600 tracking-wider"
+            placeholder="Type message..."
+            className="flex-1 bg-transparent py-3 px-4 text-sm font-medium outline-none text-white placeholder:text-slate-500 tracking-wide"
           />
           <button 
             disabled={!newMsg.trim() || sending}
@@ -168,8 +219,7 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
   return (
     <div className="flex flex-col h-[100dvh] bg-slate-950 animate-in fade-in duration-500">
       <div className="p-8 pb-4 sticky top-0 z-10 bg-slate-950/90 backdrop-blur-md">
-        <h1 className="text-3xl font-black text-white tracking-tighter uppercase leading-none">Friends<br/><span className="text-indigo-500">Nexus</span></h1>
-        <p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.4em] mt-2">Active Social Links</p>
+        <h1 className="text-3xl font-black text-white tracking-tighter uppercase leading-none">Social<br/><span className="text-indigo-500">Center</span></h1>
       </div>
 
       <div className="p-6 space-y-6 pb-40 overflow-y-auto">
@@ -187,7 +237,7 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
                   </div>
                   <div>
                     <h4 className="font-black text-white text-xs uppercase">{f.name}</h4>
-                    <p className="text-[8px] font-mono font-bold text-slate-500 uppercase tracking-tighter">Connection Requested</p>
+                    <p className="text-[8px] font-mono font-bold text-slate-300 uppercase tracking-tighter">Wants to be friends</p>
                   </div>
                 </div>
                 <button 
@@ -201,70 +251,89 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
           </div>
         )}
 
-        <div className="bg-slate-900 border border-white/5 p-6 rounded-[2rem] shadow-2xl relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-600/10 blur-3xl -mr-10 -mt-10 group-hover:bg-indigo-600/20 transition-colors"></div>
-          <h3 className="text-white font-black text-[10px] mb-4 uppercase tracking-widest flex items-center gap-2">
-            <UserPlus size={14} className="text-indigo-500" /> Establish Link
+        {/* MODERNIZED SEARCH / ADD SECTION */}
+        <div className="bg-slate-900 border border-white/5 p-6 rounded-[2.5rem] shadow-2xl relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/10 blur-3xl -mr-10 -mt-10 group-hover:bg-blue-600/20 transition-colors"></div>
+          <h3 className="text-slate-200 font-black text-[10px] mb-4 uppercase tracking-widest flex items-center gap-2">
+            <Search size={14} className="text-blue-400" /> Find Players
           </h3>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-3">
             <input 
               type="text" 
               value={targetUsername}
               onChange={(e) => setTargetUsername(e.target.value.replace(/\s/g, ''))}
-              placeholder="PLAYER USERNAME"
-              className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-[10px] font-mono font-black text-white placeholder:text-slate-700 outline-none focus:border-indigo-500 transition-all uppercase tracking-widest"
+              placeholder="Enter username..."
+              className="flex-1 bg-slate-950 border border-slate-800 rounded-2xl px-5 py-4 text-[13px] font-mono font-bold text-white placeholder:text-slate-600 outline-none focus:border-blue-500 transition-all tracking-wider shadow-inner"
             />
             <button 
+              type="button"
               onClick={handleAddFriend}
               disabled={searching}
-              className="px-6 bg-white text-black rounded-xl font-black text-[10px] active:scale-95 disabled:opacity-50 shadow-xl"
+              aria-label="Add Friend"
+              className="w-14 h-14 shrink-0 bg-gradient-to-br from-blue-500 to-blue-700 text-white rounded-2xl flex items-center justify-center transition-all duration-300 active:scale-90 hover:scale-105 disabled:opacity-50 shadow-[0_8px_20px_rgba(59,130,246,0.4)] hover:shadow-[0_12px_25px_rgba(59,130,246,0.6)] cursor-pointer"
             >
-              {searching ? <Loader2 size={12} className="animate-spin" /> : 'SYNC'}
+              {searching ? (
+                <Loader2 size={20} className="animate-spin" />
+              ) : (
+                <UserPlus size={24} strokeWidth={2} />
+              )}
             </button>
           </div>
         </div>
 
         <div className="space-y-3">
           <div className="flex items-center justify-between px-2">
-            <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Active Links</h3>
-            <span className="text-[10px] font-black text-indigo-500 bg-indigo-500/10 px-2 py-0.5 rounded-full">{activeFriends.length}</span>
+            <h3 className="text-[10px] font-black text-slate-300 uppercase tracking-widest">My Friends</h3>
+            <span className="text-[10px] font-black text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">{activeFriends.length}</span>
           </div>
           
           {activeFriends.length === 0 ? (
             <div className="text-center py-16 bg-slate-900/30 rounded-[2.5rem] border border-dashed border-slate-800">
-              <Users size={40} className="mx-auto text-slate-800 mb-4 opacity-20" />
-              <p className="text-slate-700 font-black text-[10px] uppercase tracking-widest">No Active Connections</p>
+              <Users size={40} className="mx-auto text-slate-700 mb-4 opacity-30" />
+              <p className="text-slate-500 font-black text-[10px] uppercase tracking-widest">No friends yet</p>
             </div>
           ) : (
             <div className="space-y-2">
-              {activeFriends.map(f => (
-                <div 
-                  key={f.id} 
-                  onClick={() => f.status === 'accepted' && setActiveChat(f)}
-                  className={`bg-slate-900 p-4 rounded-2xl border border-white/5 flex items-center justify-between group transition-all duration-300 ${f.status === 'accepted' ? 'hover:bg-slate-800 active:scale-[0.98] cursor-pointer' : 'opacity-60'}`}
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-slate-950 flex items-center justify-center text-indigo-500 font-black text-lg border border-slate-800 group-hover:border-indigo-500/30 transition-colors">
-                      {f.name.charAt(0).toUpperCase()}
+              {activeFriends.map(f => {
+                const isOnline = f.lastSeen && (Date.now() - f.lastSeen < 60000);
+                const hasUnread = (f.unreadCount || 0) > 0;
+                
+                return (
+                  <div 
+                    key={f.id} 
+                    onClick={() => f.status === 'accepted' && setActiveChat(f)}
+                    className={`bg-slate-900 p-4 rounded-2xl border border-white/5 flex items-center justify-between group transition-all duration-300 ${f.status === 'accepted' ? 'hover:bg-slate-800 active:scale-[0.98] cursor-pointer' : 'opacity-60'}`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="relative">
+                        <div className="w-12 h-12 rounded-xl bg-slate-950 flex items-center justify-center text-indigo-500 font-black text-lg border border-slate-800 group-hover:border-indigo-500/30 transition-colors">
+                          {f.name.charAt(0).toUpperCase()}
+                        </div>
+                        {hasUnread && (
+                          <div className="absolute -top-1 -right-1 w-4 h-4 bg-indigo-500 rounded-full border-2 border-slate-900 flex items-center justify-center animate-bounce shadow-lg shadow-indigo-900/40">
+                             <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <h4 className="font-black text-white text-sm uppercase tracking-tight">{f.name}</h4>
+                        <p className="text-[8px] font-mono font-bold text-slate-300 mt-1 flex items-center gap-1.5 uppercase">
+                           <span className={`w-1 h-1 rounded-full ${isOnline ? 'bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]' : 'bg-slate-600'}`}></span>
+                           @{f.uniqueId}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="font-black text-white text-sm uppercase tracking-tight">{f.name}</h4>
-                      <p className="text-[8px] font-mono font-bold text-slate-600 mt-1 flex items-center gap-1.5 uppercase">
-                         <span className={`w-1 h-1 rounded-full ${f.status === 'accepted' ? 'bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]' : 'bg-slate-700'}`}></span>
-                         @{f.uniqueId}
-                      </p>
-                    </div>
+                    
+                    {f.status === 'pending' ? (
+                      <span className="px-3 py-1 bg-slate-950 text-slate-400 rounded-lg text-[8px] font-black border border-slate-800 uppercase tracking-widest">Waiting</span>
+                    ) : (
+                      <div className={`p-3 rounded-xl transition-all border ${hasUnread ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-slate-950 text-indigo-400 border-slate-800 hover:bg-indigo-600 hover:text-white'}`}>
+                        <MessageCircle size={18} />
+                      </div>
+                    )}
                   </div>
-                  
-                  {f.status === 'pending' ? (
-                    <span className="px-3 py-1 bg-slate-950 text-slate-600 rounded-lg text-[8px] font-black border border-slate-800 uppercase tracking-widest">Requested</span>
-                  ) : (
-                    <div className="p-3 bg-slate-950 text-indigo-500 hover:text-white rounded-xl transition-all border border-slate-800 group-hover:bg-indigo-600 group-hover:text-white">
-                      <MessageCircle size={18} />
-                    </div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

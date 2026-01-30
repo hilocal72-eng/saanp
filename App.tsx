@@ -34,11 +34,12 @@ const App: React.FC = () => {
       const currentName = myProfile?.name || initialProfile?.name;
       if (currentName) {
         try {
-          // Check Friend Requests
+          // Heartbeat
+          await dbService.updateLastSeen(currentName);
+          
           const reqCount = await dbService.getPendingRequestCount(currentName);
           setPendingRequests(reqCount);
 
-          // Check New Messages (if not already looking at Friends tab)
           if (activeTab !== Tab.FRIENDS) {
             const msgCount = await dbService.getNewMessageCount(currentName, lastCheckTime);
             if (msgCount > 0) setHasNewMessages(true);
@@ -53,7 +54,7 @@ const App: React.FC = () => {
     };
 
     checkNotifications();
-    const interval = setInterval(checkNotifications, 5000);
+    const interval = setInterval(checkNotifications, 10000); // 10s heartbeat
     return () => clearInterval(interval);
   }, [myProfile?.name, activeTab, lastCheckTime]);
 
@@ -71,13 +72,13 @@ const App: React.FC = () => {
             <div className="w-24 h-24 bg-indigo-500/10 rounded-full flex items-center justify-center text-indigo-400 mb-8 border border-indigo-500/20 shadow-[0_0_50px_rgba(99,102,241,0.1)]">
               <Users size={48} />
             </div>
-            <h2 className="text-3xl font-black text-white tracking-tighter uppercase">Profile Required</h2>
-            <p className="text-slate-400 mt-4 font-medium leading-relaxed max-w-[280px]">Connect with others using your unique username. Setup your profile now.</p>
+            <h2 className="text-3xl font-black text-white tracking-tighter uppercase">Sign In Required</h2>
+            <p className="text-slate-300 mt-4 font-medium leading-relaxed max-w-[280px]">You need a player profile to add friends and chat. Set yours up now!</p>
             <button 
               onClick={() => setActiveTab(Tab.PROFILE)}
               className="mt-10 bg-indigo-600 hover:bg-indigo-500 text-white px-10 py-4 rounded-2xl font-black shadow-xl shadow-indigo-900/40 transition-all active:scale-95"
             >
-              SETUP IDENTITY
+              CREATE PLAYER
             </button>
           </div>
         );
@@ -100,16 +101,16 @@ const App: React.FC = () => {
             onClick={() => setActiveTab(Tab.PROFILE)}
             className={`flex-1 flex flex-col items-center gap-1 transition-all duration-300 py-2.5 rounded-3xl ${activeTab === Tab.PROFILE ? 'bg-indigo-600 shadow-[0_0_20px_rgba(79,70,229,0.4)]' : 'hover:bg-white/5'}`}
           >
-            <User size={20} className={`transition-colors duration-300 ${activeTab === Tab.PROFILE ? 'text-white' : 'text-slate-500'}`} strokeWidth={3} />
-            <span className={`text-[8px] font-black uppercase tracking-[0.2em] transition-colors duration-300 ${activeTab === Tab.PROFILE ? 'text-white' : 'text-slate-500'}`}>Profile</span>
+            <User size={20} className={`transition-colors duration-300 ${activeTab === Tab.PROFILE ? 'text-white' : 'text-slate-400'}`} strokeWidth={3} />
+            <span className={`text-[8px] font-black uppercase tracking-[0.2em] transition-colors duration-300 ${activeTab === Tab.PROFILE ? 'text-white' : 'text-slate-400'}`}>Player</span>
           </button>
 
           <button 
             onClick={() => setActiveTab(Tab.GAME)}
             className={`flex-1 flex flex-col items-center gap-1 transition-all duration-300 py-2.5 rounded-3xl ${activeTab === Tab.GAME ? 'bg-emerald-600 shadow-[0_0_20px_rgba(16,185,129,0.4)]' : 'hover:bg-white/5'}`}
           >
-            <Gamepad2 size={20} className={`transition-colors duration-300 ${activeTab === Tab.GAME ? 'text-white' : 'text-slate-500'}`} strokeWidth={3} />
-            <span className={`text-[8px] font-black uppercase tracking-[0.2em] transition-colors duration-300 ${activeTab === Tab.GAME ? 'text-white' : 'text-slate-500'}`}>Game</span>
+            <Gamepad2 size={20} className={`transition-colors duration-300 ${activeTab === Tab.GAME ? 'text-white' : 'text-slate-400'}`} strokeWidth={3} />
+            <span className={`text-[8px] font-black uppercase tracking-[0.2em] transition-colors duration-300 ${activeTab === Tab.GAME ? 'text-white' : 'text-slate-400'}`}>Play</span>
           </button>
 
           <button 
@@ -119,8 +120,8 @@ const App: React.FC = () => {
             {(pendingRequests > 0 || hasNewMessages) && (
               <span className={`absolute top-1 right-1/4 w-3 h-3 border-2 border-slate-900 rounded-full animate-bounce shadow-lg ${pendingRequests > 0 ? 'bg-rose-500 shadow-rose-900/60' : 'bg-indigo-400 shadow-indigo-900/60'}`}></span>
             )}
-            <Users size={20} className={`transition-colors duration-300 ${activeTab === Tab.FRIENDS ? 'text-white' : 'text-slate-500'}`} strokeWidth={3} />
-            <span className={`text-[8px] font-black uppercase tracking-[0.2em] transition-colors duration-300 ${activeTab === Tab.FRIENDS ? 'text-white' : 'text-slate-500'}`}>Friends</span>
+            <Users size={20} className={`transition-colors duration-300 ${activeTab === Tab.FRIENDS ? 'text-white' : 'text-slate-400'}`} strokeWidth={3} />
+            <span className={`text-[8px] font-black uppercase tracking-[0.2em] transition-colors duration-300 ${activeTab === Tab.FRIENDS ? 'text-white' : 'text-slate-400'}`}>Social</span>
           </button>
         </nav>
       </div>
