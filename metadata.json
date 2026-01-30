@@ -1,10 +1,5 @@
+
 {
-  "name": "SnakeQuest Social",
-  "description": "A PWA social game featuring Snake and Ladder with friend lists, real-time chat, and unique profile IDs.",
-  "short_name": "SnakeQuest",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#6366f1",
-  "requestFramePermissions": []
+  "status": "deprecated",
+  "message": "Use manifest.json instead"
 }

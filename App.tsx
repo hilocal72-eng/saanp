@@ -11,6 +11,8 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>(Tab.GAME);
   const [myProfile, setMyProfile] = useState<UserProfile | null>(null);
   const [pendingRequests, setPendingRequests] = useState(0);
+  const [hasNewMessages, setHasNewMessages] = useState(false);
+  const [lastCheckTime, setLastCheckTime] = useState(Date.now());
 
   useEffect(() => {
     const loadProfile = () => {
@@ -32,10 +34,20 @@ const App: React.FC = () => {
       const currentName = myProfile?.name || initialProfile?.name;
       if (currentName) {
         try {
-          const count = await dbService.getPendingRequestCount(currentName);
-          setPendingRequests(count);
+          // Check Friend Requests
+          const reqCount = await dbService.getPendingRequestCount(currentName);
+          setPendingRequests(reqCount);
+
+          // Check New Messages (if not already looking at Friends tab)
+          if (activeTab !== Tab.FRIENDS) {
+            const msgCount = await dbService.getNewMessageCount(currentName, lastCheckTime);
+            if (msgCount > 0) setHasNewMessages(true);
+          } else {
+            setHasNewMessages(false);
+            setLastCheckTime(Date.now());
+          }
         } catch (e) {
-          console.debug("Airtable polling wait...");
+          console.debug("Polling sync...");
         }
       }
     };
@@ -43,7 +55,7 @@ const App: React.FC = () => {
     checkNotifications();
     const interval = setInterval(checkNotifications, 5000);
     return () => clearInterval(interval);
-  }, [myProfile?.name]);
+  }, [myProfile?.name, activeTab, lastCheckTime]);
 
   const handleProfileUpdate = (p: UserProfile) => {
     setMyProfile(p);
@@ -104,8 +116,8 @@ const App: React.FC = () => {
             onClick={() => setActiveTab(Tab.FRIENDS)}
             className={`flex-1 flex flex-col items-center gap-1 transition-all duration-300 py-2.5 rounded-3xl relative ${activeTab === Tab.FRIENDS ? 'bg-indigo-600 shadow-[0_0_20px_rgba(79,70,229,0.4)]' : 'hover:bg-white/5'}`}
           >
-            {pendingRequests > 0 && (
-              <span className="absolute top-1 right-1/4 w-3 h-3 bg-rose-500 border-2 border-slate-900 rounded-full animate-bounce shadow-[0_0_10px_rgba(244,63,94,0.6)]"></span>
+            {(pendingRequests > 0 || hasNewMessages) && (
+              <span className={`absolute top-1 right-1/4 w-3 h-3 border-2 border-slate-900 rounded-full animate-bounce shadow-lg ${pendingRequests > 0 ? 'bg-rose-500 shadow-rose-900/60' : 'bg-indigo-400 shadow-indigo-900/60'}`}></span>
             )}
             <Users size={20} className={`transition-colors duration-300 ${activeTab === Tab.FRIENDS ? 'text-white' : 'text-slate-500'}`} strokeWidth={3} />
             <span className={`text-[8px] font-black uppercase tracking-[0.2em] transition-colors duration-300 ${activeTab === Tab.FRIENDS ? 'text-white' : 'text-slate-500'}`}>Friends</span>
