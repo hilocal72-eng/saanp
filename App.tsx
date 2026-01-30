@@ -5,7 +5,7 @@ import { dbService } from './services/dbService';
 import ProfileTab from './components/ProfileTab';
 import FriendsTab from './components/FriendsTab';
 import GameTab from './components/GameTab';
-import { User, Users, Gamepad2 } from 'lucide-react';
+import { User, Users, Gamepad2, Sparkles, Sword, Trophy, Zap } from 'lucide-react';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>(Tab.GAME);
@@ -34,9 +34,7 @@ const App: React.FC = () => {
       const currentName = myProfile?.name || initialProfile?.name;
       if (currentName) {
         try {
-          // Heartbeat
           await dbService.updateLastSeen(currentName);
-          
           const reqCount = await dbService.getPendingRequestCount(currentName);
           setPendingRequests(reqCount);
 
@@ -54,7 +52,7 @@ const App: React.FC = () => {
     };
 
     checkNotifications();
-    const interval = setInterval(checkNotifications, 10000); // 10s heartbeat
+    const interval = setInterval(checkNotifications, 10000);
     return () => clearInterval(interval);
   }, [myProfile?.name, activeTab, lastCheckTime]);
 
@@ -62,28 +60,118 @@ const App: React.FC = () => {
     setMyProfile(p);
   };
 
+  const renderProfileRequired = (title: string, subtitle: string, description: string, icon: React.ReactNode) => (
+    <div className="relative flex flex-col items-center justify-center h-[100dvh] p-8 text-center animate-in fade-in zoom-in-95 bg-slate-950 overflow-hidden">
+      {/* GAMING BACKGROUND ELEMENTS */}
+      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+        {/* Animated Grid */}
+        <div 
+          className="absolute inset-0 opacity-[0.25]"
+          style={{
+            backgroundImage: `linear-gradient(to right, #6366f1 1px, transparent 1px), linear-gradient(to bottom, #6366f1 1px, transparent 1px)`,
+            backgroundSize: '45px 45px',
+            maskImage: 'radial-gradient(ellipse at center, black, transparent 80%)',
+            transform: 'perspective(600px) rotateX(30deg) scale(2.5)',
+            transformOrigin: 'center top',
+            animation: 'grid-scroll 10s linear infinite'
+          }}
+        />
+        
+        {/* Floating Neon Blobs */}
+        <div className="absolute top-[-10%] left-[-10%] w-[80%] h-[80%] bg-indigo-600/20 blur-[150px] rounded-full animate-pulse" />
+        <div className="absolute bottom-[-15%] right-[-15%] w-[80%] h-[80%] bg-blue-600/20 blur-[150px] rounded-full animate-pulse" style={{ animationDelay: '2s' }} />
+        
+        {/* Retro Scanlines */}
+        <div className="absolute inset-0 opacity-[0.08] pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.4)_50%)] bg-[length:100%_4px]" />
+      </div>
+
+      <style>{`
+        @keyframes grid-scroll {
+          from { background-position: 0 0; }
+          to { background-position: 0 45px; }
+        }
+        @keyframes badge-float {
+          0%, 100% { transform: translateY(0) rotate(0deg); }
+          50% { transform: translateY(-20px) rotate(2deg); }
+        }
+        @keyframes shine {
+          from { transform: translateX(-100%) skewX(-20deg); }
+          to { transform: translateX(200%) skewX(-20deg); }
+        }
+      `}</style>
+
+      {/* GAMING POSTER CONTENT */}
+      <div className="relative z-10 flex flex-col items-center w-full max-w-[320px]">
+        
+        {/* STYLIZED CHARACTER/GAME BADGE */}
+        <div className="relative mb-8 animate-[badge-float_5s_ease-in-out_infinite]">
+          {/* Back Glow */}
+          <div className="absolute inset-0 bg-indigo-500/40 blur-3xl rounded-full scale-125 animate-pulse"></div>
+          
+          {/* Main Badge */}
+          <div className="relative w-40 h-40 bg-slate-900 border-4 border-indigo-500/30 rounded-[3rem] p-1 flex items-center justify-center overflow-hidden shadow-[0_0_80px_rgba(79,70,229,0.3)]">
+            <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/40 via-transparent to-blue-600/40"></div>
+            <div className="w-full h-full bg-slate-950 rounded-[2.5rem] flex items-center justify-center border border-white/10 relative overflow-hidden group">
+               {/* Decorative icons in badge */}
+               <Sword size={24} className="absolute top-4 left-4 text-white/5 -rotate-12" />
+               <Trophy size={24} className="absolute bottom-4 right-4 text-white/5 rotate-12" />
+               <Zap size={24} className="absolute top-1/2 right-2 text-white/5 -translate-y-1/2" />
+               
+               <div className="relative z-10 text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.4)]">
+                 {React.cloneElement(icon as React.ReactElement, { size: 72, strokeWidth: 2.5 })}
+               </div>
+               
+               {/* Shine animation */}
+               <div className="absolute inset-0 w-1/2 h-full bg-white/5 skew-x-[-20deg] animate-[shine_3s_infinite] pointer-events-none"></div>
+            </div>
+          </div>
+        </div>
+
+        {/* TYPOGRAPHY */}
+        <div className="space-y-2 mb-10">
+          <h3 className="text-indigo-400 font-black text-xs uppercase tracking-[0.5em] mb-1">{subtitle}</h3>
+          <h2 className="text-5xl font-black text-white tracking-tighter uppercase italic leading-[0.85] drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)]">
+            {title.split(' ')[0]}<br/>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-blue-300">{title.split(' ')[1]}</span>
+          </h2>
+          <p className="text-slate-400 mt-6 font-bold text-[11px] leading-relaxed uppercase tracking-widest px-4 opacity-80">
+            {description}
+          </p>
+        </div>
+
+        {/* CALL TO ACTION */}
+        <div className="w-full">
+          <button 
+            onClick={() => setActiveTab(Tab.PROFILE)}
+            className="group relative w-full bg-white text-black py-5 rounded-2xl font-black shadow-[0_15px_40px_rgba(255,255,255,0.1)] transition-all active:scale-95 overflow-hidden flex items-center justify-center gap-3 tracking-[0.2em] text-sm"
+          >
+            <Sparkles size={18} className="text-indigo-600 group-hover:animate-spin" />
+            CREATE PLAYER
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-indigo-100/50 to-transparent translate-x-[-100%] group-hover:translate-x-[200%] transition-transform duration-700"></div>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   const renderContent = () => {
     switch (activeTab) {
       case Tab.PROFILE:
         return <ProfileTab currentProfile={myProfile} onProfileUpdate={handleProfileUpdate} />;
       case Tab.FRIENDS:
-        return myProfile ? <FriendsTab myProfile={myProfile} /> : (
-          <div className="flex flex-col items-center justify-center h-[100dvh] p-8 text-center animate-in fade-in zoom-in-95 bg-slate-950">
-            <div className="w-24 h-24 bg-indigo-500/10 rounded-full flex items-center justify-center text-indigo-400 mb-8 border border-indigo-500/20 shadow-[0_0_50px_rgba(99,102,241,0.1)]">
-              <Users size={48} />
-            </div>
-            <h2 className="text-3xl font-black text-white tracking-tighter uppercase">Sign In Required</h2>
-            <p className="text-slate-300 mt-4 font-medium leading-relaxed max-w-[280px]">You need a player profile to add friends and chat. Set yours up now!</p>
-            <button 
-              onClick={() => setActiveTab(Tab.PROFILE)}
-              className="mt-10 bg-indigo-600 hover:bg-indigo-500 text-white px-10 py-4 rounded-2xl font-black shadow-xl shadow-indigo-900/40 transition-all active:scale-95"
-            >
-              CREATE PLAYER
-            </button>
-          </div>
+        return myProfile ? <FriendsTab myProfile={myProfile} /> : renderProfileRequired(
+          "Social Center", 
+          "Elite Network",
+          "Connect with legendary players and build your global squad.",
+          <Users />
         );
       case Tab.GAME:
-        return <GameTab myProfile={myProfile} />;
+        return myProfile ? <GameTab myProfile={myProfile} /> : renderProfileRequired(
+          "Wanna Play?", 
+          "The Arena Awaits",
+          "Unlock global matchmaking and start your quest to the top.",
+          <Gamepad2 />
+        );
       default:
         return null;
     }
