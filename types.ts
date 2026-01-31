@@ -8,6 +8,8 @@ export interface UserProfile {
   age: number;
   gender: Gender;
   lastSeen?: number; // Timestamp
+  wins?: number;
+  losses?: number;
 }
 
 export interface Friend {

@@ -59,7 +59,17 @@ export const dbService = {
       const formula = `{name}='${username.replace(/'/g, "\\'")}'`;
       const data = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.USERS}?filterByFormula=${encodeURIComponent(formula)}`);
       if (data.records && data.records.length > 0) {
-        return { id: data.records[0].id, ...data.records[0].fields } as UserProfile;
+        const f = data.records[0].fields;
+        return { 
+          id: data.records[0].id, 
+          uniqueId: String(f.name),
+          name: String(f.name),
+          age: Number(f.age),
+          gender: f.gender,
+          lastSeen: f.lastSeen,
+          wins: Number(f.wins || 0),
+          losses: Number(f.losses || 0)
+        } as UserProfile;
       }
       return null;
     } catch (e) { return null; }
@@ -77,17 +87,40 @@ export const dbService = {
     } catch (e) {}
   },
 
+  incrementStats: async (username: string, isWin: boolean) => {
+    try {
+      const user = await dbService.findPlayerGlobal(username);
+      if (user && user.id) {
+        const fields = isWin 
+          ? { wins: (user.wins || 0) + 1 }
+          : { losses: (user.losses || 0) + 1 };
+        
+        await airtableFetch(`${AIRTABLE_CONFIG.TABLES.USERS}/${user.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ fields })
+        });
+      }
+    } catch (e) {}
+  },
+
   saveProfile: async (profile: UserProfile): Promise<UserProfile> => {
     const existing = await dbService.findPlayerGlobal(profile.name);
     if (existing) throw new Error("USERNAME_TAKEN");
 
-    const fields = { name: profile.name, age: profile.age, gender: profile.gender, lastSeen: Date.now() };
+    const fields = { 
+      name: profile.name, 
+      age: profile.age, 
+      gender: profile.gender, 
+      lastSeen: Date.now(),
+      wins: 0,
+      losses: 0
+    };
     const result = await airtableFetch(AIRTABLE_CONFIG.TABLES.USERS, {
       method: 'POST',
       body: JSON.stringify({ records: [{ fields }] })
     });
     
-    const saved = { ...profile, id: result.records[0].id };
+    const saved = { ...profile, id: result.records[0].id, wins: 0, losses: 0 };
     const db = getLocalDB();
     db.users = [saved];
     saveLocalDB(db);

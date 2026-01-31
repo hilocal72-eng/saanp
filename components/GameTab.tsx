@@ -62,6 +62,21 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
     }
   };
 
+  const handleGameEnd = async (winnerId: string, loserId: string) => {
+    await dbService.incrementStats(winnerId, true);
+    await dbService.incrementStats(loserId, false);
+    
+    // Refresh local profile data if we are one of the participants
+    if (myProfile && (myProfile.name === winnerId || myProfile.name === loserId)) {
+      const updated = await dbService.findPlayerGlobal(myProfile.name);
+      if (updated) {
+        const db = { users: [updated], friends: [], chats: [], games: [] };
+        localStorage.setItem('snake_quest_db', JSON.stringify(db));
+        // Note: Ideally we'd trigger a parent state refresh here, but let's rely on tab switch/refresh for simplicity
+      }
+    }
+  };
+
   const rollDice = async () => {
     if (!game || rolling || isSliding || game.winner || !myProfile) return;
     const isMyTurn = (game.turn === 'host' && game.hostId === myProfile.uniqueId) ||
@@ -100,26 +115,38 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
         setIsSliding(true);
         setTimeout(async () => {
           const nextTurn = game.turn === 'host' ? 'guest' : 'host';
+          const winner = finalPos === BOARD_CELLS ? (isHost ? game.hostId : game.guestId!) : undefined;
           const updatedGame: GameState = {
             ...midGame,
             hostPos: isHost ? finalPos : game.hostPos,
             guestPos: !isHost ? finalPos : game.guestPos,
             turn: nextTurn,
-            winner: finalPos === BOARD_CELLS ? (isHost ? game.hostId : game.guestId) : undefined
+            winner
           };
           await dbService.updateGame(updatedGame);
           setGame(updatedGame);
           setIsSliding(false);
+
+          if (winner) {
+            const loser = isHost ? game.guestId! : game.hostId;
+            handleGameEnd(winner, loser);
+          }
         }, 1000);
       } else {
         const nextTurn = game.turn === 'host' ? 'guest' : 'host';
+        const winner = landingPos === BOARD_CELLS ? (isHost ? game.hostId : game.guestId!) : undefined;
         const updatedGame: GameState = {
           ...midGame,
           turn: nextTurn,
-          winner: landingPos === BOARD_CELLS ? (isHost ? game.hostId : game.guestId) : undefined
+          winner
         };
         await dbService.updateGame(updatedGame);
         setGame(updatedGame);
+
+        if (winner) {
+          const loser = isHost ? game.guestId! : game.hostId;
+          handleGameEnd(winner, loser);
+        }
       }
     }, 800);
   };
@@ -206,7 +233,6 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 pb-44">
-        {/* PLAYER ARENA HEADER - ONLY NAMES, NO ICONS, SMALL FONT */}
         <div className="relative flex items-center justify-between gap-4 mb-8 mt-2 px-2">
            <div className={`flex-1 flex flex-col items-center justify-center p-3 rounded-3xl border transition-all duration-500 ${game.turn === 'host' ? 'bg-indigo-600/30 border-indigo-500 shadow-[0_0_20px_rgba(79,70,229,0.4)] scale-105' : 'bg-slate-900/40 border-slate-800 opacity-40'}`}>
               <div className="text-center">
@@ -231,7 +257,6 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
         <div className="w-full max-w-[95vw] mx-auto aspect-square bg-[#fffbeb] rounded-3xl border-8 border-amber-900/10 shadow-2xl overflow-hidden flex flex-wrap relative">
           {renderBoard()}
           <svg className="absolute inset-0 pointer-events-none z-10 w-full h-full" viewBox="0 0 100 100">
-            {/* Ladders and Snakes SVG content */}
             <defs>
               <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
                 <feGaussianBlur in="SourceAlpha" stdDeviation="0.4" />
@@ -291,7 +316,6 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
         ) : (
           <div className="w-full flex flex-col items-center gap-4 pb-24">
             <div className="relative group">
-               {/* DICE DISPLAY */}
                <div className={`w-28 h-28 rounded-[3rem] border-4 flex items-center justify-center shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 relative overflow-hidden
                   ${rolling ? 'animate-bounce border-indigo-400 shadow-indigo-500/40 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500' : 
                   'border-white/20 bg-gradient-to-br from-slate-800 to-slate-900 opacity-100'}`}>
@@ -301,7 +325,6 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
                   </span>
                </div>
                
-               {/* DICE ROLL BUTTON - RED FOR CLEAR VISIBILITY */}
                <button 
                 disabled={!isMyTurn || rolling || isSliding || !game.guestId} 
                 onClick={rollDice} 

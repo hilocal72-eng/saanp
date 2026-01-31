@@ -39,6 +39,8 @@ export const BOARD_CELLS = 100;
  * - age (Number)
  * - gender (Single line text)
  * - lastSeen (Number)
+ * - wins (Number)    <-- ADD THIS
+ * - losses (Number)  <-- ADD THIS
  * 
  * Friends Table:
  * - user1Id (Single line text)
