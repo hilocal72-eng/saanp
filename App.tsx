@@ -8,46 +8,54 @@ import GameTab from './components/GameTab';
 import { User, Users, Gamepad2, Sparkles, Sword, Trophy, Zap } from 'lucide-react';
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<Tab>(Tab.GAME);
+  // Default to PROFILE tab to ensure setup is the first thing users see
+  const [activeTab, setActiveTab] = useState<Tab>(Tab.PROFILE);
   const [myProfile, setMyProfile] = useState<UserProfile | null>(null);
   const [pendingRequests, setPendingRequests] = useState(0);
   const [hasNewMessages, setHasNewMessages] = useState(false);
   const [lastCheckTime, setLastCheckTime] = useState(Date.now());
 
+  // 1. Load profile ONLY once on mount
   useEffect(() => {
-    const loadProfile = () => {
-      const data = localStorage.getItem('snake_quest_db');
-      if (data) {
+    const data = localStorage.getItem('snake_quest_db');
+    if (data) {
+      try {
         const parsed = JSON.parse(data);
         if (parsed.users && parsed.users.length > 0) {
-          const profile = parsed.users[0];
-          setMyProfile(profile);
-          return profile;
+          setMyProfile(parsed.users[0]);
+          // If we have a profile, we can safely default to the Game tab
+          setActiveTab(Tab.GAME);
         }
+      } catch (e) {
+        console.error("Failed to load profile from storage", e);
       }
-      return null;
-    };
+    }
+  }, []);
 
-    const initialProfile = loadProfile();
+  // 2. Poll for notifications ONLY if a profile exists
+  useEffect(() => {
+    if (!myProfile?.name) {
+      setPendingRequests(0);
+      setHasNewMessages(false);
+      return;
+    }
 
     const checkNotifications = async () => {
-      const currentName = myProfile?.name || initialProfile?.name;
-      if (currentName) {
-        try {
-          await dbService.updateLastSeen(currentName);
-          const reqCount = await dbService.getPendingRequestCount(currentName);
-          setPendingRequests(reqCount);
+      try {
+        await dbService.updateLastSeen(myProfile.name);
+        
+        const reqCount = await dbService.getPendingRequestCount(myProfile.name);
+        setPendingRequests(reqCount);
 
-          if (activeTab !== Tab.FRIENDS) {
-            const msgCount = await dbService.getNewMessageCount(currentName, lastCheckTime);
-            if (msgCount > 0) setHasNewMessages(true);
-          } else {
-            setHasNewMessages(false);
-            setLastCheckTime(Date.now());
-          }
-        } catch (e) {
-          console.debug("Polling sync...");
+        if (activeTab !== Tab.FRIENDS) {
+          const msgCount = await dbService.getNewMessageCount(myProfile.name, lastCheckTime);
+          if (msgCount > 0) setHasNewMessages(true);
+        } else {
+          setHasNewMessages(false);
+          setLastCheckTime(Date.now());
         }
+      } catch (e) {
+        console.debug("Polling sync error...");
       }
     };
 
@@ -56,15 +64,17 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [myProfile?.name, activeTab, lastCheckTime]);
 
-  const handleProfileUpdate = (p: UserProfile) => {
+  const handleProfileUpdate = (p: UserProfile | null) => {
     setMyProfile(p);
+    if (!p) {
+      setActiveTab(Tab.PROFILE);
+    }
   };
 
   const renderProfileRequired = (title: string, subtitle: string, description: string, icon: React.ReactNode) => (
     <div className="relative flex flex-col items-center justify-center h-[100dvh] p-8 text-center animate-in fade-in zoom-in-95 bg-slate-950 overflow-hidden">
       {/* GAMING BACKGROUND ELEMENTS */}
       <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-        {/* Animated Grid */}
         <div 
           className="absolute inset-0 opacity-[0.25]"
           style={{
@@ -76,13 +86,9 @@ const App: React.FC = () => {
             animation: 'grid-scroll 10s linear infinite'
           }}
         />
-        
-        {/* Floating Neon Blobs */}
         <div className="absolute top-[-10%] left-[-10%] w-[80%] h-[80%] bg-indigo-600/20 blur-[150px] rounded-full animate-pulse" />
         <div className="absolute bottom-[-15%] right-[-15%] w-[80%] h-[80%] bg-blue-600/20 blur-[150px] rounded-full animate-pulse" style={{ animationDelay: '2s' }} />
-        
-        {/* Retro Scanlines */}
-        <div className="absolute inset-0 opacity-[0.08] pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.4)_50%)] bg-[length:100%_4px]" />
+        <div className="absolute inset-0 opacity-[0.08] pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%)] bg-[length:100%_4px]" />
       </div>
 
       <style>{`
@@ -100,34 +106,23 @@ const App: React.FC = () => {
         }
       `}</style>
 
-      {/* GAMING POSTER CONTENT */}
       <div className="relative z-10 flex flex-col items-center w-full max-w-[320px]">
-        
-        {/* STYLIZED CHARACTER/GAME BADGE */}
         <div className="relative mb-8 animate-[badge-float_5s_ease-in-out_infinite]">
-          {/* Back Glow */}
           <div className="absolute inset-0 bg-indigo-500/40 blur-3xl rounded-full scale-125 animate-pulse"></div>
-          
-          {/* Main Badge */}
           <div className="relative w-40 h-40 bg-slate-900 border-4 border-indigo-500/30 rounded-[3rem] p-1 flex items-center justify-center overflow-hidden shadow-[0_0_80px_rgba(79,70,229,0.3)]">
             <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/40 via-transparent to-blue-600/40"></div>
             <div className="w-full h-full bg-slate-950 rounded-[2.5rem] flex items-center justify-center border border-white/10 relative overflow-hidden group">
-               {/* Decorative icons in badge */}
                <Sword size={24} className="absolute top-4 left-4 text-white/5 -rotate-12" />
                <Trophy size={24} className="absolute bottom-4 right-4 text-white/5 rotate-12" />
                <Zap size={24} className="absolute top-1/2 right-2 text-white/5 -translate-y-1/2" />
-               
                <div className="relative z-10 text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.4)]">
                  {React.cloneElement(icon as React.ReactElement, { size: 72, strokeWidth: 2.5 })}
                </div>
-               
-               {/* Shine animation */}
                <div className="absolute inset-0 w-1/2 h-full bg-white/5 skew-x-[-20deg] animate-[shine_3s_infinite] pointer-events-none"></div>
             </div>
           </div>
         </div>
 
-        {/* TYPOGRAPHY */}
         <div className="space-y-2 mb-10">
           <h3 className="text-indigo-400 font-black text-xs uppercase tracking-[0.5em] mb-1">{subtitle}</h3>
           <h2 className="text-5xl font-black text-white tracking-tighter uppercase italic leading-[0.85] drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)]">
@@ -139,7 +134,6 @@ const App: React.FC = () => {
           </p>
         </div>
 
-        {/* CALL TO ACTION */}
         <div className="w-full">
           <button 
             onClick={() => setActiveTab(Tab.PROFILE)}
