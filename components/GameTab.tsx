@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { GameState, UserProfile } from '../types';
 import { dbService } from '../services/dbService';
 import { LADDERS, SNAKES, BOARD_CELLS } from '../constants';
-import { Trophy, RefreshCw, Loader2, Dices, Sword, AlertCircle, X, LogOut, HelpCircle } from 'lucide-react';
+import { Trophy, RefreshCw, Loader2, Dices, Sword, AlertCircle, X, HelpCircle, WifiOff } from 'lucide-react';
 
 interface GameTabProps {
   myProfile: UserProfile | null;
@@ -18,19 +18,54 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
   const [loading, setLoading] = useState(false);
   const [showFullModal, setShowFullModal] = useState(false);
   const [showQuitModal, setShowQuitModal] = useState(false);
+  const [isOpponentStale, setIsOpponentStale] = useState(false);
 
+  // Polling and Heartbeat logic
   useEffect(() => {
     let interval: any;
-    if (game && !game.winner && !rolling && !isSliding) {
+    if (game && !game.winner && myProfile) {
       interval = setInterval(async () => {
+        // 1. Fetch latest game state
         const remoteGame = await dbService.getGameByCode(game.code);
-        if (remoteGame && JSON.stringify(remoteGame) !== JSON.stringify(game)) {
-          setGame(remoteGame);
+        
+        if (remoteGame) {
+          // 2. Check for winner (someone else might have set it, e.g. opponent forfeited)
+          if (remoteGame.winner && remoteGame.winner !== game.winner) {
+            setGame(remoteGame);
+            return;
+          }
+
+          // 3. Detect if opponent is stale (Involuntary leave)
+          if (remoteGame.guestId) {
+            const opponentName = remoteGame.hostId === myProfile.uniqueId ? remoteGame.guestId : remoteGame.hostId;
+            const opponent = await dbService.findPlayerGlobal(opponentName);
+            
+            // If opponent hasn't been seen for 120+ seconds, they likely disconnected
+            if (opponent && opponent.lastSeen && (Date.now() - opponent.lastSeen > 120000)) {
+              setIsOpponentStale(true);
+              // Claim victory automatically
+              const finalGame = { ...remoteGame, winner: myProfile.uniqueId };
+              await dbService.updateGame(finalGame);
+              await handleGameEnd(myProfile.uniqueId, opponentName);
+              setGame(finalGame);
+              return;
+            } else {
+              setIsOpponentStale(false);
+            }
+          }
+
+          // 4. Update local state if different
+          if (JSON.stringify(remoteGame) !== JSON.stringify(game)) {
+            setGame(remoteGame);
+          }
+
+          // 5. Send Heartbeat (I am still here)
+          await dbService.updateGame({ ...remoteGame }); 
         }
-      }, 2000);
+      }, 3000);
     }
     return () => clearInterval(interval);
-  }, [game, rolling, isSliding, setGame]);
+  }, [game?.id, game?.winner, game?.code, myProfile?.uniqueId]);
 
   const createGame = async () => {
     if (!myProfile) return alert('Please complete your profile first');
@@ -72,6 +107,7 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
     await dbService.incrementStats(winnerId, true);
     await dbService.incrementStats(loserId, false);
     
+    // Sync local stats if possible
     if (myProfile && (myProfile.name === winnerId || myProfile.name === loserId)) {
       const updated = await dbService.findPlayerGlobal(myProfile.name);
       if (updated) {
@@ -91,21 +127,24 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
   };
 
   const confirmLeave = async () => {
-    if (!game) return;
-    const isHost = game.hostId === myProfile?.uniqueId;
+    if (!game || !myProfile) return;
+    const isHost = game.hostId === myProfile.uniqueId;
 
     if (game.guestId && !game.winner) {
+      // Voluntary Forfeit
       const winnerId = isHost ? game.guestId : game.hostId;
       const loserId = isHost ? game.hostId : game.guestId;
+      
+      const finalGame = { ...game, winner: winnerId };
+      await dbService.updateGame(finalGame);
       await handleGameEnd(winnerId, loserId);
-    }
-
-    if (game.id && (game.winner || !game.guestId)) {
+    } else if (game.id && (game.winner || !game.guestId)) {
       await dbService.deleteGame(game.id);
     }
     
     setGame(null);
     setShowQuitModal(false);
+    setIsOpponentStale(false);
   };
 
   const rollDice = async () => {
@@ -152,12 +191,20 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
           const updatedGame: GameState = {
             ...midGame,
             hostPos: isHost ? finalPos : game.hostPos,
+            guestPos: !isHost ? landingPos : game.guestPos, // Fixed: using landingPos logic from midGame
+            turn: nextTurn,
+            winner
+          };
+          // Simplified re-assignment for correctness
+          const finalUpdate: GameState = {
+            ...midGame,
+            hostPos: isHost ? finalPos : game.hostPos,
             guestPos: !isHost ? finalPos : game.guestPos,
             turn: nextTurn,
             winner
           };
-          await dbService.updateGame(updatedGame);
-          setGame(updatedGame);
+          await dbService.updateGame(finalUpdate);
+          setGame(finalUpdate);
           setIsSliding(false);
 
           if (winner) {
@@ -224,7 +271,6 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
   if (!game) {
     return (
       <div className="flex flex-col min-h-[100dvh] bg-slate-950 p-6 animate-in fade-in duration-700">
-        {/* ROOM FULL MODAL */}
         {showFullModal && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
             <div className="bg-slate-900 border border-amber-500/30 p-10 rounded-[2.5rem] shadow-[0_0_80px_rgba(245,158,11,0.1)] text-center max-w-xs w-full relative">
@@ -265,7 +311,7 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
               <div className="h-[1px] flex-1 bg-white"></div>
             </div>
             <div className="flex flex-col gap-2">
-              <input type="text" maxLength={4} value={inputCode} onChange={(e) => setInputCode(e.target.value.replace(/\D/g, ''))} placeholder="ROOM ID" className="w-full text-center font-mono font-black text-lg py-3 rounded-2xl bg-white/5 border border-white/10 text-white placeholder:text-slate-600 outline-none focus:border-indigo-500" />
+              <input type="text" maxLength={4} value={inputCode} onChange={(e) => setInputCode(e.target.value.replace(/\D/g, ''))} placeholder="ROOM ID" className="w-full text-center font-mono font-black text-lg py-3 rounded-2xl bg-white/5 border border-slate-700/60 text-white placeholder:text-slate-600 outline-none focus:border-indigo-500" />
               <button disabled={loading || inputCode.length < 4} onClick={joinGame} className="w-full bg-indigo-600 text-white py-3 rounded-2xl font-black text-xs active:scale-95 flex items-center justify-center gap-2">
                 {loading ? <Loader2 className="animate-spin" size={16} /> : 'JOIN ARENA'}
               </button>
@@ -281,16 +327,16 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
 
   return (
     <div className="flex flex-col h-[100dvh] bg-slate-950 text-white overflow-hidden animate-in zoom-in-95 duration-500">
-      {/* QUIT MODAL */}
+      {/* QUIT CONFIRMATION MODAL */}
       {showQuitModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
           <div className="bg-slate-900 border border-rose-500/30 p-8 rounded-[2rem] shadow-[0_0_80px_rgba(244,63,94,0.1)] text-center max-w-xs w-full relative">
             <div className="w-16 h-16 bg-rose-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
               <HelpCircle size={32} className="text-rose-500" />
             </div>
-            <h2 className="text-2xl font-black text-white uppercase tracking-tighter leading-tight mb-2">Quit Match?</h2>
+            <h2 className="text-2xl font-black text-white uppercase tracking-tighter leading-tight mb-2">Quit ?</h2>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed mb-8">
-              Leaving mid-battle results in a loss. Surrender?
+              Leaving now will forfeit the match and count as a loss.
             </p>
             <div className="grid grid-cols-2 gap-3">
               <button 
@@ -303,7 +349,7 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
                 onClick={confirmLeave}
                 className="w-full bg-rose-600 text-white font-black py-4 rounded-xl shadow-lg shadow-rose-900/40 active:scale-95 transition-all text-[9px] tracking-widest uppercase"
               >
-                YES, QUIT
+                YES
               </button>
             </div>
           </div>
@@ -315,7 +361,15 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
           <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Global Room</span>
           <span className="text-sm font-black text-indigo-400">#{game.code}</span>
         </div>
-        <button onClick={handleLeaveRoom} className="px-4 py-2 bg-rose-500/10 text-rose-500 rounded-xl text-[9px] font-black border border-rose-500/20 active:scale-90 transition-transform">LEAVE ROOM</button>
+        <div className="flex items-center gap-3">
+          {isOpponentStale && (
+            <div className="flex items-center gap-1.5 bg-rose-500/10 text-rose-400 px-3 py-1.5 rounded-lg border border-rose-500/20 animate-pulse">
+              <WifiOff size={12} />
+              <span className="text-[8px] font-black uppercase">Opponent Offline</span>
+            </div>
+          )}
+          <button onClick={handleLeaveRoom} className="px-4 py-2 bg-rose-500/10 text-rose-500 rounded-xl text-[9px] font-black border border-rose-500/20 active:scale-90 transition-transform">LEAVE ROOM</button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 pb-56">
@@ -392,50 +446,50 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
           <div className="w-full px-4 animate-in slide-in-from-bottom-full pb-20">
             <div className="bg-indigo-600 p-6 rounded-[2rem] flex flex-col items-center gap-2 shadow-2xl">
               <Trophy size={40} className="text-white mb-2" />
-              <h2 className="text-xl font-black text-white uppercase tracking-tighter">{game.winner} WON THE BATTLE!</h2>
+              <h2 className="text-xl font-black text-white uppercase tracking-tighter text-center">
+                {game.winner === myProfile?.uniqueId ? (isOpponentStale ? 'OPPONENT FORFEITED - YOU' : 'YOU') : game.winner} WON THE BATTLE!
+              </h2>
               <button onClick={handleLeaveRoom} className="mt-2 px-8 py-3 bg-white text-black rounded-xl font-black text-[10px] uppercase active:scale-95 transition-transform">BACK TO MENU</button>
             </div>
           </div>
         ) : (
           <div className="w-full flex flex-col items-center gap-4 pb-28">
-            <div className="flex items-center gap-6 relative">
-               {/* HOST DICE (RED) */}
+            <div className="flex items-center gap-8 relative">
+               {/* HOST DICE (Circle display) */}
                <div className="flex flex-col items-center gap-2">
-                 <div className={`w-20 h-20 rounded-[2.5rem] border-4 flex items-center justify-center shadow-[0_10px_40px_rgba(225,29,72,0.4)] transition-all duration-300 relative overflow-hidden border-rose-500/30
-                    ${(rolling && game.turn === 'host') ? 'animate-bounce border-rose-400 bg-rose-600 scale-110 shadow-rose-500/60' : 
-                    'bg-rose-900/40 opacity-100'}`}>
-                    <span className="text-4xl font-black text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] z-10">
+                 <div className={`w-12 h-12 rounded-full border-2 flex items-center justify-center shadow-lg transition-all duration-300 relative overflow-hidden
+                    ${(rolling && game.turn === 'host') ? 'animate-bounce border-indigo-400 bg-indigo-600 scale-110' : 
+                    'border-indigo-500/20 bg-indigo-600 opacity-100'}`}>
+                    <span className="text-xl font-black text-white drop-shadow-md z-10">
                       {game.hostLastDice || '-'}
                     </span>
-                    <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent"></div>
                  </div>
-                 <span className="text-[7px] font-black uppercase text-rose-400 tracking-[0.2em]">HOST DICE</span>
+                 <span className="text-[6px] font-black uppercase text-indigo-400 tracking-widest">HOST</span>
                </div>
 
-               <div className="h-10 w-[1px] bg-white/10"></div>
+               <div className="h-8 w-[1px] bg-white/10"></div>
 
-               {/* GUEST DICE (RED) */}
+               {/* GUEST DICE (Circle display) */}
                <div className="flex flex-col items-center gap-2">
-                 <div className={`w-20 h-20 rounded-[2.5rem] border-4 flex items-center justify-center shadow-[0_10px_40px_rgba(225,29,72,0.4)] transition-all duration-300 relative overflow-hidden border-rose-500/30
-                    ${(rolling && game.turn === 'guest') ? 'animate-bounce border-rose-400 bg-rose-600 scale-110 shadow-rose-500/60' : 
-                    'bg-rose-900/40 opacity-100'}`}>
-                    <span className="text-4xl font-black text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] z-10">
+                 <div className={`w-12 h-12 rounded-full border-2 flex items-center justify-center shadow-lg transition-all duration-300 relative overflow-hidden
+                    ${(rolling && game.turn === 'guest') ? 'animate-bounce border-emerald-400 bg-emerald-600 scale-110' : 
+                    'border-emerald-500/20 bg-emerald-600 opacity-100'}`}>
+                    <span className="text-xl font-black text-white drop-shadow-md z-10">
                       {game.guestLastDice || '-'}
                     </span>
-                    <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent"></div>
                  </div>
-                 <span className="text-[7px] font-black uppercase text-rose-400 tracking-[0.2em]">GUEST DICE</span>
+                 <span className="text-[6px] font-black uppercase text-emerald-400 tracking-widest">GUEST</span>
                </div>
                
                <button 
                 disabled={!isMyTurn || rolling || isSliding || !game.guestId} 
                 onClick={rollDice} 
-                className={`absolute -bottom-8 left-1/2 -translate-x-1/2 w-16 h-16 rounded-full flex items-center justify-center transition-all active:scale-75 shadow-2xl z-[110] border-4 border-slate-950
+                className={`absolute -bottom-12 left-1/2 -translate-x-1/2 w-20 h-20 rounded-full flex items-center justify-center transition-all active:scale-75 shadow-2xl z-[110] border-4 border-slate-950
                   ${isMyTurn && game.guestId && !rolling && !isSliding 
-                    ? 'bg-rose-600 text-white cursor-pointer hover:bg-rose-500 shadow-rose-500/50' 
+                    ? 'bg-indigo-600 text-white cursor-pointer hover:bg-indigo-500 shadow-indigo-500/50' 
                     : 'bg-slate-800 text-slate-600 cursor-not-allowed opacity-50'}`}
                >
-                 {rolling ? <RefreshCw className="animate-spin" size={24} /> : <Dices size={24} className="text-white" />}
+                 {rolling ? <RefreshCw className="animate-spin" size={40} /> : <Dices size={44} className="text-white" />}
                </button>
             </div>
           </div>

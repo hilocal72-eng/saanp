@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile, Gender } from '../types';
 import { dbService } from '../services/dbService';
-// Added Trophy to the lucide-react imports
 import { User, CheckCircle2, Copy, AlertTriangle, PartyPopper, Lock, Sparkles, LogIn, UserPlus, LogOut, Swords, TrendingUp, Trophy } from 'lucide-react';
 
 interface ProfileTabProps {
@@ -11,7 +10,7 @@ interface ProfileTabProps {
 }
 
 const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile }) => {
-  const [mode, setMode] = useState<'create' | 'login'>('create');
+  const [mode, setMode] = useState<'create' | 'login'>('login');
   const [name, setName] = useState(currentProfile?.name || '');
   const [age, setAge] = useState(currentProfile?.age?.toString() || '');
   const [gender, setGender] = useState<Gender>(currentProfile?.gender || 'male');
@@ -166,7 +165,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
           {!isLoggedIn && (
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Username</label>
-              <input type="text" value={name} onChange={(e) => setName(e.target.value.replace(/\s/g, ''))} className="w-full px-5 py-4 rounded-2xl bg-slate-950/50 border border-white/5 focus:border-indigo-500 outline-none transition-all text-white font-bold" placeholder="Username" />
+              <input type="text" value={name} onChange={(e) => setName(e.target.value.replace(/\s/g, ''))} className="w-full px-5 py-4 rounded-2xl bg-slate-950/50 border border-slate-700/50 focus:border-indigo-500 outline-none transition-all text-white font-bold" placeholder="Username" />
             </div>
           )}
 
@@ -174,7 +173,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
             <>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Age</label>
-                <input type="number" value={age} onChange={(e) => setAge(e.target.value)} className="w-full px-5 py-4 rounded-2xl bg-slate-950/50 border border-white/5 focus:border-indigo-500 outline-none transition-all text-white font-bold" placeholder="Your age" />
+                <input type="number" value={age} onChange={(e) => setAge(e.target.value)} className="w-full px-5 py-4 rounded-2xl bg-slate-950/50 border border-slate-700/50 focus:border-indigo-500 outline-none transition-all text-white font-bold" placeholder="Your age" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Gender</label>
@@ -239,7 +238,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
                 {saving ? 'INITIALIZING...' : (mode === 'login' ? 'LOGIN PLAYER' : 'CREATE PLAYER')}
               </button>
               <button onClick={() => setMode(mode === 'create' ? 'login' : 'create')} className="w-full text-slate-400 font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:text-indigo-400 transition-colors">
-                {mode === 'create' ? <><LogIn size={14} /> Already have a player? Login</> : <><UserPlus size={14} /> Need a player? Create</>}
+                {mode === 'login' ? <><UserPlus size={14} /> Need a player? Create Player</> : <><LogIn size={14} /> Already have a player? Login</>}
               </button>
             </div>
           )}

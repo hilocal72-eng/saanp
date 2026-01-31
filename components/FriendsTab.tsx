@@ -207,7 +207,7 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
           <div ref={scrollRef} />
         </div>
 
-        <div className="fixed bottom-24 left-6 right-6 p-2 bg-slate-900/90 backdrop-blur-xl rounded-2xl border border-white/10 flex gap-2 items-center shadow-2xl">
+        <div className="fixed bottom-24 left-6 right-6 p-2 bg-slate-900/90 backdrop-blur-xl rounded-2xl border border-white/20 flex gap-2 items-center shadow-2xl">
           <input 
             type="text" 
             value={newMsg}
@@ -234,7 +234,7 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
       {friendToDelete && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
           <div className="bg-slate-900 border border-rose-500/30 p-8 rounded-[2rem] shadow-[0_0_80px_rgba(244,63,94,0.1)] text-center max-w-xs w-full">
-            <div className="w-16 h-16 bg-rose-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-rose-500/30">
+            <div className="w-16 h-16 bg-rose-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-rose-500/30">
               <Frown size={32} className="text-rose-500" />
             </div>
             <h2 className="text-xl font-black text-white uppercase tracking-tighter leading-tight mb-2">Remove Friend?</h2>
@@ -291,7 +291,7 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
           </div>
         )}
 
-        <div className="bg-slate-900 border border-white/5 p-6 rounded-[2.5rem] shadow-2xl relative overflow-hidden group">
+        <div className="bg-slate-900 border border-white/10 p-6 rounded-[2.5rem] shadow-2xl relative overflow-hidden group">
           <h3 className="text-slate-200 font-black text-[10px] mb-4 uppercase tracking-widest flex items-center gap-2">
             <Search size={14} className="text-blue-400" /> Find Players
           </h3>
@@ -301,7 +301,7 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
               value={targetUsername}
               onChange={(e) => setTargetUsername(e.target.value.replace(/\s/g, ''))}
               placeholder="Enter username..."
-              className="flex-1 bg-slate-950 border border-slate-800 rounded-2xl px-5 py-4 text-[13px] font-mono font-bold text-white placeholder:text-slate-600 outline-none focus:border-blue-500 transition-all tracking-wider shadow-inner"
+              className="flex-1 bg-slate-950 border border-slate-700/60 rounded-2xl px-5 py-4 text-[13px] font-mono font-bold text-white placeholder:text-slate-600 outline-none focus:border-blue-500 transition-all tracking-wider shadow-inner"
             />
             <button 
               type="button"
