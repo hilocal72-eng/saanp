@@ -136,14 +136,14 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
               <h2 className="font-black text-white text-sm leading-none">{activeChat.name}</h2>
               <span className={`text-[8px] font-black uppercase tracking-widest flex items-center gap-1 mt-1 ${isFriendOnline ? 'text-emerald-400' : 'text-slate-500'}`}>
                 {isFriendOnline && <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>}
-                {isFriendOnline ? 'Active' : 'Away'}
+                {isFriendOnline ? 'Online' : 'Away'}
               </span>
             </div>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 pb-48">
+        <div className="flex-1 overflow-y-auto p-6 space-y-4 pb-72">
           {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center opacity-30"><p className="font-black text-[10px] uppercase tracking-widest text-slate-300">Say hello!</p></div>
+            <div className="h-full flex flex-col items-center justify-center text-center opacity-30 mt-20"><p className="font-black text-[10px] uppercase tracking-widest text-slate-300">Say hello!</p></div>
           ) : (
             messages.map((m) => {
               const isMe = m.senderId === myProfile.name;
@@ -156,7 +156,8 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
           )}
           <div ref={scrollRef} />
         </div>
-        <div className="fixed bottom-24 left-6 right-6 p-2 bg-slate-900/90 backdrop-blur-xl rounded-2xl border border-slate-700 flex gap-2 items-center shadow-2xl">
+        {/* LIFTED HIGHER (bottom-36) TO AVOID BOTTOM NAV OVERLAP */}
+        <div className="fixed bottom-36 left-6 right-6 p-2 bg-slate-900/95 backdrop-blur-2xl rounded-2xl border border-white/10 flex gap-2 items-center shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-[100]">
           <input type="text" value={newMsg} onChange={(e) => setNewMsg(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()} placeholder="Type message..." className="flex-1 bg-transparent py-3 px-4 text-sm font-medium outline-none text-white placeholder:text-slate-500 tracking-wide" />
           <button disabled={!newMsg.trim() || sending} onClick={handleSendMessage} className="p-3 bg-indigo-600 text-white rounded-xl active:scale-90 disabled:opacity-50 shadow-lg shadow-indigo-900/40">
             {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
@@ -168,7 +169,6 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
 
   return (
     <div className="flex flex-col h-[100dvh] bg-slate-950 animate-in fade-in duration-500 relative">
-      {/* CUSTOM FEEDBACK TOAST */}
       {feedback && (
         <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[250] flex items-center gap-3 px-6 py-4 rounded-2xl bg-slate-900 border border-indigo-500/30 shadow-[0_0_30px_rgba(79,70,229,0.3)] animate-in slide-in-from-top-full duration-300">
           {feedback.type === 'success' ? <CheckCircle2 className="text-emerald-500" size={20} /> : <AlertCircle className="text-rose-500" size={20} />}
@@ -176,7 +176,6 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
         </div>
       )}
 
-      {/* DELETE CONFIRMATION MODAL */}
       {friendToDelete && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
           <div className="bg-slate-900 border border-rose-500/30 p-8 rounded-[2rem] shadow-[0_0_80px_rgba(244,63,94,0.1)] text-center max-w-xs w-full">
@@ -195,7 +194,7 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
         <h1 className="text-3xl font-black text-white tracking-tighter uppercase leading-none">Social<br/><span className="text-indigo-500">Center</span></h1>
       </div>
 
-      <div className="p-6 space-y-6 pb-40 overflow-y-auto">
+      <div className="p-6 space-y-6 pb-48 overflow-y-auto">
         {incomingRequests.length > 0 && (
           <div className="space-y-3 animate-in slide-in-from-top-4 duration-500">
             <div className="flex items-center gap-2 px-2"><Bell size={14} className="text-rose-500 animate-bounce" /><h3 className="text-[10px] font-black text-rose-500 uppercase tracking-widest">Incoming Requests</h3></div>
@@ -228,8 +227,17 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
               {activeFriends.map(f => (
                 <div key={f.id} onClick={() => f.status === 'accepted' && setActiveChat(f)} className={`bg-slate-900 p-4 rounded-2xl border border-white/5 flex items-center justify-between group transition-all duration-300 ${f.status === 'accepted' ? 'hover:bg-slate-800 active:scale-[0.98] cursor-pointer' : 'opacity-60'}`}>
                   <div className="flex items-center gap-4">
-                    <div className="relative"><div className="w-12 h-12 rounded-xl bg-slate-950 flex items-center justify-center text-indigo-500 font-black border border-slate-800 group-hover:border-indigo-500/30">{f.name.charAt(0).toUpperCase()}</div>{(f.unreadCount || 0) > 0 && <div className="absolute -top-1 -right-1 w-4 h-4 bg-indigo-500 rounded-full border-2 border-slate-900 flex items-center justify-center animate-bounce shadow-lg"><div className="w-1.5 h-1.5 bg-white rounded-full"></div></div>}</div>
-                    <div><h4 className="font-black text-white text-sm uppercase tracking-tight">{f.name}</h4><p className="text-[8px] font-mono font-bold text-slate-300 mt-1 flex items-center gap-1.5 uppercase"><span className={`w-1 h-1 rounded-full ${f.lastSeen && (Date.now() - f.lastSeen < 60000) ? 'bg-emerald-500 shadow-md' : 'bg-slate-600'}`}></span>@{f.uniqueId}</p></div>
+                    <div className="relative">
+                      <div className="w-12 h-12 rounded-xl bg-slate-950 flex items-center justify-center text-indigo-500 font-black border border-slate-800 group-hover:border-indigo-500/30">{f.name.charAt(0).toUpperCase()}</div>
+                      {(f.unreadCount || 0) > 0 && <div className="absolute -top-1 -right-1 w-4 h-4 bg-indigo-500 rounded-full border-2 border-slate-900 flex items-center justify-center animate-bounce shadow-lg"><div className="w-1.5 h-1.5 bg-white rounded-full"></div></div>}
+                    </div>
+                    <div>
+                      <h4 className="font-black text-white text-sm uppercase tracking-tight">{f.name}</h4>
+                      <p className="text-[8px] font-mono font-bold text-slate-300 mt-1 flex items-center gap-1.5 uppercase">
+                        <span className={`w-1.5 h-1.5 rounded-full ${f.lastSeen && (Date.now() - f.lastSeen < 60000) ? 'bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-slate-600'}`}></span>
+                        {f.lastSeen && (Date.now() - f.lastSeen < 60000) ? 'Online' : 'Away'}
+                      </p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     {f.status === 'accepted' && (

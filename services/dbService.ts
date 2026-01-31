@@ -133,7 +133,10 @@ export const dbService = {
     try {
       const formula = `OR({user1Id}='${myUsername.replace(/'/g, "\\'")}', {user2Id}='${myUsername.replace(/'/g, "\\'")}')`;
       const data = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.FRIENDS}?filterByFormula=${encodeURIComponent(formula)}`);
-      return data.records.map((r: any) => {
+      
+      if (!data.records || data.records.length === 0) return [];
+
+      const friendItems = data.records.map((r: any) => {
         const f = r.fields;
         const friendUid = f.user1Id === myUsername ? f.user2Id : f.user1Id;
         return { 
@@ -144,6 +147,21 @@ export const dbService = {
           isIncoming: f.user2Id === myUsername && f.status === 'pending' 
         };
       });
+
+      // Now fetch profiles for all unique friends to get lastSeen
+      const friendNames = friendItems.map(f => f.name);
+      const profileFormula = `OR(${friendNames.map(n => `{name}='${n.replace(/'/g, "\\'")}'`).join(',')})`;
+      const profileData = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.USERS}?filterByFormula=${encodeURIComponent(profileFormula)}`);
+      
+      const profilesByUid = profileData.records.reduce((acc: any, r: any) => {
+        acc[r.fields.name] = r.fields;
+        return acc;
+      }, {});
+
+      return friendItems.map(f => ({
+        ...f,
+        lastSeen: profilesByUid[f.name]?.lastSeen || 0
+      }));
     } catch (e) { return []; }
   },
 
