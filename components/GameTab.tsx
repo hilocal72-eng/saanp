@@ -1,9 +1,9 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GameState, UserProfile } from '../types';
 import { dbService } from '../services/dbService';
 import { LADDERS, SNAKES, BOARD_CELLS } from '../constants';
-import { Trophy, RefreshCw, Dices, Sword, Home, Zap } from 'lucide-react';
+import { Trophy, RefreshCw, Dices, Sword, Home, Zap, Frown } from 'lucide-react';
 
 interface GameTabProps {
   myProfile: UserProfile | null;
@@ -16,13 +16,23 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
   const [rolling, setRolling] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showQuitModal, setShowQuitModal] = useState(false);
-  const [isOpponentStale, setIsOpponentStale] = useState(false);
   const [statsUpdatedForGame, setStatsUpdatedForGame] = useState<string | null>(null);
 
-  // Snappy movement states
+  // Visual position states for markers
   const [visualHostPos, setVisualHostPos] = useState(game?.hostPos || 1);
   const [visualGuestPos, setVisualGuestPos] = useState(game?.guestPos || 1);
-  const [isMoving, setIsMoving] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
+  
+  // Ref to track state in walking loop to prevent race conditions
+  const isWalking = useRef(false);
+  const currentHostTarget = useRef(game?.hostPos || 1);
+  const currentGuestTarget = useRef(game?.guestPos || 1);
+  const latestGameRef = useRef<GameState | null>(game);
+
+  // Sync ref with state
+  useEffect(() => {
+    latestGameRef.current = game;
+  }, [game]);
 
   const isMyTurn = !!(game && myProfile && (
     (game.turn === 'host' && game.hostId === myProfile.uniqueId) ||
@@ -40,30 +50,77 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
     }
   }, [myProfile, statsUpdatedForGame]);
 
-  // Fast movement animation
+  // Realistic step-by-step walking animation
+  const walkTo = async (
+    current: number, 
+    finalTarget: number, 
+    setter: (n: number) => void, 
+    ref: React.MutableRefObject<number>,
+    isHostPlayer: boolean
+  ) => {
+    if (current === finalTarget) return;
+    
+    isWalking.current = true;
+    setIsAnimating(true);
+
+    // Identify if the destination is a result of a snake or ladder
+    let jumpLanding = finalTarget;
+    let jumpTriggerCell = finalTarget;
+    
+    // Check if the final target is an endpoint of a known jump
+    // We walk to the TRIGGER cell (the mouth or ladder base) first.
+    const jumpStart = Object.keys({ ...LADDERS, ...SNAKES }).find(k => {
+      const s = parseInt(k);
+      const e = LADDERS[s] || SNAKES[s];
+      return e === finalTarget;
+    });
+
+    if (jumpStart) {
+      jumpTriggerCell = parseInt(jumpStart);
+    }
+
+    // 1. Walking Phase: Slow, one cell at a time
+    let tempPos = current;
+    while (tempPos !== jumpTriggerCell) {
+      // Re-check if the server target has moved significantly during our long walk
+      const serverTarget = isHostPlayer ? latestGameRef.current?.hostPos : latestGameRef.current?.guestPos;
+      if (serverTarget && serverTarget !== finalTarget) {
+        // If server state updated while walking, adjust destination (basic sync)
+        // We'll just break and let the next effect trigger handle the new destination
+        break; 
+      }
+
+      tempPos = tempPos < jumpTriggerCell ? tempPos + 1 : tempPos - 1;
+      setter(tempPos);
+      
+      // REALISTIC SLOW PACE: 800ms per cell
+      await new Promise(r => setTimeout(r, 800)); 
+    }
+
+    // 2. Jumping/Sliding Phase
+    if (tempPos === jumpTriggerCell && jumpTriggerCell !== finalTarget) {
+      // Pause for realization (the "Oh no!" or "Yay!" moment)
+      await new Promise(r => setTimeout(r, 1000));
+      setter(finalTarget);
+      // Wait for the slide/climb animation to complete
+      await new Promise(r => setTimeout(r, 1200)); 
+    }
+
+    ref.current = finalTarget;
+    setIsAnimating(false);
+    isWalking.current = false;
+  };
+
   useEffect(() => {
-    if (!game) return;
-    const targetHost = game.hostPos;
-    const targetGuest = game.guestPos;
+    if (!game || isWalking.current) return;
 
-    const step = () => {
-      let changed = false;
-      if (visualHostPos !== targetHost) {
-        if (Math.abs(visualHostPos - targetHost) > 12) setVisualHostPos(targetHost);
-        else setVisualHostPos(prev => (prev < targetHost ? prev + 1 : prev - 1));
-        changed = true;
-      }
-      if (visualGuestPos !== targetGuest) {
-        if (Math.abs(visualGuestPos - targetGuest) > 12) setVisualGuestPos(targetGuest);
-        else setVisualGuestPos(prev => (prev < targetGuest ? prev + 1 : prev - 1));
-        changed = true;
-      }
-      setIsMoving(changed);
-    };
-
-    const timer = setTimeout(step, 45); 
-    return () => clearTimeout(timer);
-  }, [game?.hostPos, game?.guestPos, visualHostPos, visualGuestPos]);
+    if (game.hostPos !== currentHostTarget.current) {
+      walkTo(currentHostTarget.current, game.hostPos, setVisualHostPos, currentHostTarget, true);
+    }
+    if (game.guestPos !== currentGuestTarget.current) {
+      walkTo(currentGuestTarget.current, game.guestPos, setVisualGuestPos, currentGuestTarget, false);
+    }
+  }, [game?.hostPos, game?.guestPos]);
 
   useEffect(() => {
     let interval: any;
@@ -75,6 +132,7 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
           return;
         }
 
+        // Only sync winner state immediately
         if (remoteGame.winner && statsUpdatedForGame !== remoteGame.id) {
           const iWon = remoteGame.winner === myProfile.uniqueId;
           await syncMyStatsLocally(iWon, remoteGame.id!);
@@ -82,23 +140,24 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
           return;
         }
 
+        // Auto-win if opponent stays away too long
         if (remoteGame.guestId && !remoteGame.winner) {
           const opponentUid = remoteGame.hostId === myProfile.uniqueId ? remoteGame.guestId : remoteGame.hostId;
           const opponent = await dbService.findPlayerGlobal(opponentUid);
           if (opponent && opponent.lastSeen && (Date.now() - opponent.lastSeen > 60000)) {
-            setIsOpponentStale(true);
             const finalGame = { ...remoteGame, winner: myProfile.uniqueId };
             await dbService.updateGame(finalGame);
             await syncMyStatsLocally(true, remoteGame.id!);
             setGame(finalGame);
             return;
-          } else { setIsOpponentStale(false); }
+          }
         }
 
+        // Detect remote changes
         if (JSON.stringify(remoteGame) !== JSON.stringify(game)) { 
           setGame(remoteGame); 
         }
-      }, 2000);
+      }, 2000); // Polling every 2s for Airtable
     }
     return () => clearInterval(interval);
   }, [game?.id, game?.winner, game?.code, myProfile?.uniqueId, statsUpdatedForGame, syncMyStatsLocally, setGame]);
@@ -112,6 +171,8 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
       setGame(newGame);
       setVisualHostPos(1);
       setVisualGuestPos(1);
+      currentHostTarget.current = 1;
+      currentGuestTarget.current = 1;
       setStatsUpdatedForGame(null);
     } catch (e) { alert("Failed to create room."); } finally { setLoading(false); }
   };
@@ -125,7 +186,10 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
         setGame(result.game);
         setVisualHostPos(result.game.hostPos);
         setVisualGuestPos(result.game.guestPos);
+        currentHostTarget.current = result.game.hostPos;
+        currentGuestTarget.current = result.game.guestPos;
         setStatsUpdatedForGame(null);
+        setInputCode(''); // Clear input after join
       } else alert('Room not found or full.');
     } catch (e) { alert("Error joining game."); } finally { setLoading(false); }
   };
@@ -149,7 +213,7 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
   };
 
   const rollDice = async () => {
-    if (!game || rolling || isMoving || game.winner || !myProfile || !isMyTurn || !game.guestId) return;
+    if (!game || rolling || isAnimating || game.winner || !myProfile || !isMyTurn || !game.guestId) return;
     setRolling(true);
     
     const dice = Math.floor(Math.random() * 6) + 1;
@@ -160,6 +224,7 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
     const finalPos = LADDERS[landingPos] || SNAKES[landingPos] || landingPos;
     const winnerId = finalPos === BOARD_CELLS ? (isHost ? game.hostId : game.guestId!) : undefined;
 
+    // Fast local UI update before Airtable sync (for better "feel")
     setTimeout(async () => {
       setRolling(false);
       const update = {
@@ -189,12 +254,8 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
   const renderBoard = () => {
     const cells = [];
     const palette = [
-      'bg-[#f9a8d4]', // Pink
-      'bg-[#fdba74]', // Orange
-      'bg-[#fde047]', // Yellow
-      'bg-[#86efac]', // Green
-      'bg-[#7dd3fc]', // Blue
-      'bg-[#c084fc]', // Purple
+      'bg-[#f9a8d4]', 'bg-[#fdba74]', 'bg-[#fde047]', 
+      'bg-[#86efac]', 'bg-[#7dd3fc]', 'bg-[#c084fc]',
     ];
     
     for (let row = 9; row >= 0; row--) {
@@ -213,14 +274,6 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
                 <Home size={18} className="text-red-800" fill="currentColor" />
               </div>
             )}
-            <div className="relative flex items-center justify-center w-full h-full pointer-events-none z-[60]">
-              {visualHostPos === cellNum && (
-                <div className="w-5 h-5 bg-indigo-600 rounded-full border-2 border-white shadow-xl animate-bounce"></div>
-              )}
-              {visualGuestPos === cellNum && (
-                <div className="w-5 h-5 bg-emerald-600 rounded-full border-2 border-white shadow-xl animate-bounce"></div>
-              )}
-            </div>
           </div>
         );
       }
@@ -233,6 +286,9 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
     return snakeColors[start % snakeColors.length];
   };
 
+  const hostCoords = getCellCoords(visualHostPos);
+  const guestCoords = getCellCoords(visualGuestPos);
+
   if (!game) {
     return (
       <div className="flex flex-col min-h-[100dvh] bg-slate-950 p-8 animate-in fade-in duration-700 relative overflow-hidden">
@@ -244,8 +300,15 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
           </div>
           <div className="w-full max-w-[260px] space-y-6 pb-48">
             <button disabled={loading} onClick={createGame} className="w-full bg-white text-black font-black py-4 rounded-2xl active:scale-95 text-xs uppercase tracking-widest shadow-xl">HOST NEW ROOM</button>
-            <div className="flex flex-col gap-3">
-              <input type="text" maxLength={4} value={inputCode} onChange={(e) => setInputCode(e.target.value.replace(/\D/g, ''))} placeholder="CODE" className="w-full text-center font-black text-xl py-3 rounded-2xl bg-slate-900 border border-slate-800 text-white outline-none focus:border-indigo-500 transition-all" />
+            <div className="flex flex-col gap-3 relative">
+              <input 
+                type="text" 
+                maxLength={4} 
+                value={inputCode} 
+                onChange={(e) => setInputCode(e.target.value.replace(/\D/g, ''))} 
+                placeholder={inputCode ? "" : "CODE"}
+                className="w-full text-center font-black text-xl py-3 rounded-2xl bg-slate-900 border border-slate-800 text-white outline-none focus:border-indigo-500 transition-all placeholder:opacity-40" 
+              />
               <button disabled={loading || inputCode.length < 4} onClick={joinGame} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs uppercase active:scale-95">JOIN ARENA</button>
             </div>
           </div>
@@ -253,6 +316,8 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
       </div>
     );
   }
+
+  const iWon = game.winner === myProfile?.uniqueId;
 
   return (
     <div className="flex flex-col h-[100dvh] bg-slate-950 text-white overflow-hidden pb-48">
@@ -281,7 +346,9 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
             <span className={`text-xs font-black truncate max-w-[80px] ${game.turn === 'guest' ? 'text-emerald-400 underline underline-offset-4' : 'text-slate-500'}`}>{game.guestId || 'Lobby...'}</span>
           </div>
         </div>
-        <button onClick={() => setShowQuitModal(true)} className="px-3 py-1.5 bg-rose-500/10 text-rose-500 rounded-lg text-[9px] font-black border border-rose-500/20 active:scale-90">QUIT</button>
+        {!game.winner && (
+          <button onClick={() => setShowQuitModal(true)} className="px-3 py-1.5 bg-rose-500/10 text-rose-500 rounded-lg text-[9px] font-black border border-rose-500/20 active:scale-90">QUIT</button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 scrollbar-hide">
@@ -296,116 +363,120 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
            </div>
         </div>
 
-        <div className="w-full max-w-[95vw] mx-auto aspect-square bg-[#fffbeb] rounded-[1.5rem] border-[12px] border-amber-900 shadow-[0_30px_60px_rgba(0,0,0,0.7)] overflow-hidden flex flex-wrap relative">
-          {renderBoard()}
+        <div className="w-full max-w-[95vw] mx-auto aspect-square bg-[#fffbeb] rounded-[1.5rem] border-[12px] border-amber-900 shadow-[0_30px_60px_rgba(0,0,0,0.7)] overflow-hidden relative">
+          <div className="absolute inset-0 flex flex-wrap z-10">
+            {renderBoard()}
+          </div>
           
           <svg className="absolute inset-0 pointer-events-none z-[40] w-full h-full" viewBox="0 0 100 100">
-            {/* IMPROVED LADDERS - PERPENDICULAR RUNGS */}
             {Object.entries(LADDERS).map(([start, end]) => {
               const s = getCellCoords(parseInt(start));
               const e = getCellCoords(end);
               const ladderColor = "#3e1f05";
-              
               const dx = e.x - s.x;
               const dy = e.y - s.y;
               const dist = Math.sqrt(dx * dx + dy * dy);
-              // Perpendicular unit vector
               const px = -dy / dist;
               const py = dx / dist;
               const halfWidth = 2.5;
-              
               return (
                 <g key={`ladder-${start}`} className="drop-shadow-md">
-                  {/* Rails offset by perpendicular vector */}
                   <line x1={s.x + px * halfWidth} y1={s.y + py * halfWidth} x2={e.x + px * halfWidth} y2={e.y + py * halfWidth} stroke={ladderColor} strokeWidth="2.5" strokeLinecap="round" />
                   <line x1={s.x - px * halfWidth} y1={s.y - py * halfWidth} x2={e.x - px * halfWidth} y2={e.y - py * halfWidth} stroke={ladderColor} strokeWidth="2.5" strokeLinecap="round" />
-                  
-                  {/* Rungs perpendicular to rail direction */}
                   {[0.15, 0.3, 0.45, 0.6, 0.75, 0.9].map(r => {
                     const cx = s.x + dx * r;
                     const cy = s.y + dy * r;
                     return (
-                      <line 
-                        key={r} 
-                        x1={cx + px * halfWidth} y1={cy + py * halfWidth}
-                        x2={cx - px * halfWidth} y2={cy - py * halfWidth}
-                        stroke={ladderColor} 
-                        strokeWidth="1.2" 
-                        strokeLinecap="round" 
-                      />
+                      <line key={r} x1={cx + px * halfWidth} y1={cy + py * halfWidth} x2={cx - px * halfWidth} y2={cy - py * halfWidth} stroke={ladderColor} strokeWidth="1.2" strokeLinecap="round" />
                     );
                   })}
                 </g>
               );
             })}
             
-            {/* THIN ELEGANT SNAKES */}
             {Object.entries(SNAKES).map(([start, end]) => {
               const s = getCellCoords(parseInt(start));
               const e = getCellCoords(end);
               const sNum = parseInt(start);
               const color = getSnakeColor(sNum);
-              
               const dx = e.x - s.x;
               const dy = e.y - s.y;
               const dist = Math.sqrt(dx*dx + dy*dy);
               const nx = -dy / dist;
               const ny = dx / dist;
               const amp = (sNum % 2 === 0 ? 12 : -12);
-              
               const cx1 = s.x + dx/3 + nx * amp;
               const cy1 = s.y + dy/3 + ny * amp;
               const cx2 = s.x + 2*dx/3 - nx * amp;
               const cy2 = s.y + 2*dy/3 - ny * amp;
-              
               return (
                 <g key={`snake-${start}`} className="drop-shadow-[0_4px_6px_rgba(0,0,0,0.4)]">
-                  <path 
-                    d={`M ${s.x} ${s.y} C ${cx1} ${cy1} ${cx2} ${cy2} ${e.x} ${e.y}`} 
-                    fill="none" 
-                    stroke={color} 
-                    strokeWidth="1.2" 
-                    strokeLinecap="round" 
-                  />
-                  {/* Texture layer - thinner dots */}
-                  <path 
-                    d={`M ${s.x} ${s.y} C ${cx1} ${cy1} ${cx2} ${cy2} ${e.x} ${e.y}`} 
-                    fill="none" 
-                    stroke="rgba(255,255,255,0.4)" 
-                    strokeWidth="0.6" 
-                    strokeLinecap="round" 
-                    strokeDasharray="0.5 1.5"
-                  />
-                  {/* Scaled-down head and features for "thin" look */}
+                  <path d={`M ${s.x} ${s.y} C ${cx1} ${cy1} ${cx2} ${cy2} ${e.x} ${e.y}`} fill="none" stroke={color} strokeWidth="1.2" strokeLinecap="round" />
+                  <path d={`M ${s.x} ${s.y} C ${cx1} ${cy1} ${cx2} ${cy2} ${e.x} ${e.y}`} fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.6" strokeLinecap="round" strokeDasharray="0.5 1.5" />
                   <circle cx={s.x} cy={s.y} r="1.4" fill={color} />
                   <circle cx={s.x - 0.5} cy={s.y - 0.4} r="0.3" fill="white" />
                   <circle cx={s.x + 0.5} cy={s.y - 0.4} r="0.3" fill="white" />
                   <circle cx={s.x - 0.5} cy={s.y - 0.4} r="0.15" fill="black" />
                   <circle cx={s.x + 0.5} cy={s.y - 0.4} r="0.15" fill="black" />
-                  {/* Thin tongue */}
                   <path d={`M ${s.x} ${s.y-1.4} L ${s.x-0.6} ${s.y-2.6} M ${s.x} ${s.y-1.4} L ${s.x+0.6} ${s.y-2.6}`} stroke="#f43f5e" strokeWidth="0.3" strokeLinecap="round" />
                 </g>
               );
             })}
           </svg>
+
+          {/* Player Markers Layer with slow transitions */}
+          <div className="absolute inset-0 z-[60] pointer-events-none">
+            {/* Host Marker */}
+            <div 
+              className="absolute w-5 h-5 bg-indigo-600 rounded-full border-2 border-white shadow-xl animate-bounce transition-all ease-in-out duration-700"
+              style={{ 
+                left: `${hostCoords.x}%`, 
+                top: `${hostCoords.y}%`, 
+                transform: 'translate(-50%, -50%)' 
+              }}
+            />
+            {/* Guest Marker */}
+            <div 
+              className="absolute w-5 h-5 bg-emerald-600 rounded-full border-2 border-white shadow-xl animate-bounce transition-all ease-in-out duration-700"
+              style={{ 
+                left: `${guestCoords.x}%`, 
+                top: `${guestCoords.y}%`, 
+                transform: 'translate(-50%, -50%)' 
+              }}
+            />
+          </div>
         </div>
       </div>
 
       <div className="fixed bottom-[110px] left-0 right-0 px-6 z-[110] max-w-md mx-auto">
         {game.winner ? (
-          <div className="w-full bg-indigo-600 p-6 rounded-[2.5rem] text-center shadow-2xl animate-in slide-in-from-bottom-full border border-white/20">
-            <Trophy size={40} className="text-white mx-auto mb-2" />
-            <h2 className="text-xl font-black text-white uppercase">
-              {game.winner === myProfile?.uniqueId ? 'VICTORY REACHED!' : 'DEFEAT IN ARENA'}
+          <div className={`w-full p-8 rounded-[2.5rem] text-center shadow-[0_20px_50px_rgba(0,0,0,0.5)] border animate-in slide-in-from-bottom-full duration-500 ${iWon ? 'bg-indigo-600 border-indigo-400' : 'bg-slate-900 border-rose-500/30'}`}>
+            <div className="mb-4 flex justify-center">
+              {iWon ? (
+                <div className="relative">
+                  <Trophy size={64} className="text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.5)] animate-bounce" />
+                  <Zap className="absolute -top-2 -right-2 text-white animate-pulse" size={20} fill="currentColor" />
+                </div>
+              ) : (
+                <div className="relative">
+                  <Frown size={64} className="text-rose-500/80 animate-pulse" />
+                </div>
+              )}
+            </div>
+            <h2 className={`text-4xl font-black uppercase italic tracking-tighter ${iWon ? 'text-white' : 'text-rose-500'}`}>
+              {iWon ? 'Winner' : 'Loser'}
             </h2>
-            <button onClick={confirmLeave} className="mt-4 px-8 py-3 bg-white text-black rounded-xl font-black text-[10px] uppercase shadow-lg active:scale-95 transition-transform tracking-widest">END SESSION</button>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60 mt-2">
+              {iWon ? 'Champion of the Arena' : 'Better luck next time'}
+            </p>
+            <button onClick={confirmLeave} className="mt-8 px-10 py-4 bg-white text-black rounded-2xl font-black text-[11px] uppercase shadow-xl active:scale-95 transition-all tracking-widest hover:bg-slate-100">BACK TO LOBBY</button>
           </div>
         ) : (
           <div className="flex justify-center">
             <button 
-              disabled={!isMyTurn || rolling || isMoving || !game.guestId} 
+              disabled={!isMyTurn || rolling || isAnimating || !game.guestId} 
               onClick={rollDice} 
-              className={`w-24 h-24 rounded-full flex items-center justify-center transition-all active:scale-75 shadow-[0_0_50px_rgba(79,70,229,0.4)] border-4 border-slate-950 ${isMyTurn && game.guestId && !rolling && !isMoving ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
+              className={`w-24 h-24 rounded-full flex items-center justify-center transition-all active:scale-75 shadow-[0_0_50px_rgba(79,70,229,0.4)] border-4 border-slate-950 ${isMyTurn && game.guestId && !rolling && !isAnimating ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
             >
               {rolling ? (
                 <RefreshCw className="animate-spin" size={40} />
