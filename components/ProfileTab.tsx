@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile, Gender } from '../types';
 import { dbService } from '../services/dbService';
-import { User, CheckCircle2, Copy, AlertTriangle, PartyPopper, Lock, Sparkles, LogIn, UserPlus, LogOut, Swords, TrendingUp, Trophy, Star } from 'lucide-react';
+import { User, CheckCircle2, Copy, AlertTriangle, PartyPopper, Sparkles, LogIn, UserPlus, LogOut, Swords, TrendingUp, Trophy, Star } from 'lucide-react';
 
 interface ProfileTabProps {
   onProfileUpdate: (p: UserProfile | null) => void;
@@ -149,14 +149,16 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
           </div>
           
           <div className="flex flex-col items-center justify-center gap-2">
-            <h1 className="text-4xl font-black tracking-tighter text-white uppercase italic drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)] break-all max-w-full">
-              {isLoggedIn ? currentProfile.name : (mode === 'login' ? 'Login' : 'Setup Profile')}
-            </h1>
-            {isLoggedIn && (
-              <button onClick={handleLogout} className="mt-2 px-6 py-2 bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white rounded-full border border-rose-500/20 transition-all active:scale-95 flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.2em] backdrop-blur-sm">
-                <LogOut size={14} strokeWidth={3} /> Terminate Session
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              <h1 className="text-4xl font-black tracking-tighter text-white uppercase italic drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)] break-all max-w-full">
+                {isLoggedIn ? currentProfile.name : (mode === 'login' ? 'Login' : 'Setup Profile')}
+              </h1>
+              {isLoggedIn && (
+                <button onClick={handleLogout} className="p-2 bg-rose-500/20 hover:bg-rose-500 text-rose-500 hover:text-white rounded-xl border border-rose-500/20 transition-all active:scale-90 backdrop-blur-sm" title="Logout">
+                  <LogOut size={18} strokeWidth={3} />
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
