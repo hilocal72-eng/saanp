@@ -91,20 +91,19 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
     e.preventDefault();
     e.stopPropagation();
     
-    if (window.confirm('Log out from this player profile?')) {
-      try {
-        // 1. Wipe local storage
-        localStorage.removeItem('snake_quest_db');
-        
-        // 2. Clear global state
-        onProfileUpdate(null);
-        
-        // 3. Force hard refresh - App.tsx defaults to ProfileTab when no user is found
-        window.location.reload();
-      } catch (err) {
-        console.error("Logout error:", err);
-        window.location.reload();
-      }
+    // Immediate logout without confirmation popup as requested
+    try {
+      // 1. Wipe local storage
+      localStorage.removeItem('snake_quest_db');
+      
+      // 2. Clear global state
+      onProfileUpdate(null);
+      
+      // 3. Force hard refresh - App.tsx defaults to ProfileTab when no user is found
+      window.location.reload();
+    } catch (err) {
+      console.error("Logout error:", err);
+      window.location.reload();
     }
   };
 
@@ -274,7 +273,6 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
                 </button>
               </div>
               
-              {/* Help text positioned directly beneath the ID box */}
               <p className="text-[10px] text-indigo-400 text-center font-black uppercase tracking-[0.15em] animate-pulse">
                 Use this ID to connect with friends
               </p>
