@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Tab, UserProfile } from './types';
+import { Tab, UserProfile, GameState } from './types';
 import { dbService } from './services/dbService';
 import ProfileTab from './components/ProfileTab';
 import FriendsTab from './components/FriendsTab';
@@ -11,19 +11,20 @@ const App: React.FC = () => {
   // Default to PROFILE tab to ensure setup is the first thing users see
   const [activeTab, setActiveTab] = useState<Tab>(Tab.PROFILE);
   const [myProfile, setMyProfile] = useState<UserProfile | null>(null);
+  const [activeGame, setActiveGame] = useState<GameState | null>(null);
   const [pendingRequests, setPendingRequests] = useState(0);
   const [hasNewMessages, setHasNewMessages] = useState(false);
   const [lastCheckTime, setLastCheckTime] = useState(Date.now());
 
-  // 1. Load profile ONLY once on mount
+  // 1. Load profile and session ONLY once on mount
   useEffect(() => {
     const data = localStorage.getItem('snake_quest_db');
     if (data) {
       try {
         const parsed = JSON.parse(data);
         if (parsed.users && parsed.users.length > 0) {
-          setMyProfile(parsed.users[0]);
-          // If we have a profile, we can safely default to the Game tab
+          const user = parsed.users[0];
+          setMyProfile(user);
           setActiveTab(Tab.GAME);
         }
       } catch (e) {
@@ -68,6 +69,7 @@ const App: React.FC = () => {
     setMyProfile(p);
     if (!p) {
       setActiveTab(Tab.PROFILE);
+      setActiveGame(null);
     }
   };
 
@@ -160,7 +162,7 @@ const App: React.FC = () => {
           <Users />
         );
       case Tab.GAME:
-        return myProfile ? <GameTab myProfile={myProfile} /> : renderProfileRequired(
+        return myProfile ? <GameTab myProfile={myProfile} game={activeGame} setGame={setActiveGame} /> : renderProfileRequired(
           "Wanna Play?", 
           "The Arena Awaits",
           "Unlock global matchmaking and start your quest to the top.",
