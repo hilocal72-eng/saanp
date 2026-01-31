@@ -3,7 +3,10 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GameState, UserProfile } from '../types';
 import { dbService } from '../services/dbService';
 import { LADDERS, SNAKES, BOARD_CELLS } from '../constants';
-import { Trophy, RefreshCw, Dices, Sword, Home, Zap, Frown } from 'lucide-react';
+import { 
+  Trophy, RefreshCw, Dices, Sword, Home, Zap, Frown,
+  Dice1, Dice2, Dice3, Dice4, Dice5, Dice6, Star
+} from 'lucide-react';
 
 interface GameTabProps {
   myProfile: UserProfile | null;
@@ -14,6 +17,7 @@ interface GameTabProps {
 const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
   const [inputCode, setInputCode] = useState('');
   const [rolling, setRolling] = useState(false);
+  const [rollingDiceValue, setRollingDiceValue] = useState<number>(1);
   const [loading, setLoading] = useState(false);
   const [showQuitModal, setShowQuitModal] = useState(false);
   const [statsUpdatedForGame, setStatsUpdatedForGame] = useState<string | null>(null);
@@ -23,13 +27,11 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
   const [visualGuestPos, setVisualGuestPos] = useState(game?.guestPos || 1);
   const [isAnimating, setIsAnimating] = useState(false);
   
-  // Ref to track state in walking loop to prevent race conditions
   const isWalking = useRef(false);
   const currentHostTarget = useRef(game?.hostPos || 1);
   const currentGuestTarget = useRef(game?.guestPos || 1);
   const latestGameRef = useRef<GameState | null>(game);
 
-  // Sync ref with state
   useEffect(() => {
     latestGameRef.current = game;
   }, [game]);
@@ -50,7 +52,6 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
     }
   }, [myProfile, statsUpdatedForGame]);
 
-  // Realistic step-by-step walking animation
   const walkTo = async (
     current: number, 
     finalTarget: number, 
@@ -63,47 +64,34 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
     isWalking.current = true;
     setIsAnimating(true);
 
-    // Identify if the destination is a result of a snake or ladder
-    let jumpLanding = finalTarget;
     let jumpTriggerCell = finalTarget;
-    
-    // Check if the final target is an endpoint of a known jump
-    // We walk to the TRIGGER cell (the mouth or ladder base) first.
-    const jumpStart = Object.keys({ ...LADDERS, ...SNAKES }).find(k => {
-      const s = parseInt(k);
-      const e = LADDERS[s] || SNAKES[s];
-      return e === finalTarget;
-    });
+    const possibleTriggers = Object.entries({ ...LADDERS, ...SNAKES })
+      .filter(([start, end]) => end === finalTarget)
+      .map(([start]) => parseInt(start));
 
-    if (jumpStart) {
-      jumpTriggerCell = parseInt(jumpStart);
+    const validTrigger = possibleTriggers.find(t => t > current && t <= current + 6);
+    if (validTrigger) {
+      jumpTriggerCell = validTrigger;
     }
 
-    // 1. Walking Phase: Slow, one cell at a time
     let tempPos = current;
-    while (tempPos !== jumpTriggerCell) {
-      // Re-check if the server target has moved significantly during our long walk
-      const serverTarget = isHostPlayer ? latestGameRef.current?.hostPos : latestGameRef.current?.guestPos;
-      if (serverTarget && serverTarget !== finalTarget) {
-        // If server state updated while walking, adjust destination (basic sync)
-        // We'll just break and let the next effect trigger handle the new destination
-        break; 
-      }
-
-      tempPos = tempPos < jumpTriggerCell ? tempPos + 1 : tempPos - 1;
-      setter(tempPos);
-      
-      // REALISTIC SLOW PACE: 800ms per cell
-      await new Promise(r => setTimeout(r, 800)); 
-    }
-
-    // 2. Jumping/Sliding Phase
-    if (tempPos === jumpTriggerCell && jumpTriggerCell !== finalTarget) {
-      // Pause for realization (the "Oh no!" or "Yay!" moment)
-      await new Promise(r => setTimeout(r, 1000));
+    if (jumpTriggerCell <= current) {
       setter(finalTarget);
-      // Wait for the slide/climb animation to complete
-      await new Promise(r => setTimeout(r, 1200)); 
+    } else {
+      while (tempPos < jumpTriggerCell) {
+        const serverTarget = isHostPlayer ? latestGameRef.current?.hostPos : latestGameRef.current?.guestPos;
+        if (serverTarget !== undefined && serverTarget !== finalTarget) {
+          break; 
+        }
+        tempPos++;
+        setter(tempPos);
+        await new Promise(r => setTimeout(r, 600)); 
+      }
+      if (tempPos === jumpTriggerCell && jumpTriggerCell !== finalTarget) {
+        await new Promise(r => setTimeout(r, 800));
+        setter(finalTarget);
+        await new Promise(r => setTimeout(r, 1000)); 
+      }
     }
 
     ref.current = finalTarget;
@@ -113,7 +101,6 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
 
   useEffect(() => {
     if (!game || isWalking.current) return;
-
     if (game.hostPos !== currentHostTarget.current) {
       walkTo(currentHostTarget.current, game.hostPos, setVisualHostPos, currentHostTarget, true);
     }
@@ -131,16 +118,12 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
           setGame(null);
           return;
         }
-
-        // Only sync winner state immediately
         if (remoteGame.winner && statsUpdatedForGame !== remoteGame.id) {
           const iWon = remoteGame.winner === myProfile.uniqueId;
           await syncMyStatsLocally(iWon, remoteGame.id!);
           setGame(remoteGame);
           return;
         }
-
-        // Auto-win if opponent stays away too long
         if (remoteGame.guestId && !remoteGame.winner) {
           const opponentUid = remoteGame.hostId === myProfile.uniqueId ? remoteGame.guestId : remoteGame.hostId;
           const opponent = await dbService.findPlayerGlobal(opponentUid);
@@ -152,12 +135,10 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
             return;
           }
         }
-
-        // Detect remote changes
         if (JSON.stringify(remoteGame) !== JSON.stringify(game)) { 
           setGame(remoteGame); 
         }
-      }, 2000); // Polling every 2s for Airtable
+      }, 2000);
     }
     return () => clearInterval(interval);
   }, [game?.id, game?.winner, game?.code, myProfile?.uniqueId, statsUpdatedForGame, syncMyStatsLocally, setGame]);
@@ -189,7 +170,7 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
         currentHostTarget.current = result.game.hostPos;
         currentGuestTarget.current = result.game.guestPos;
         setStatsUpdatedForGame(null);
-        setInputCode(''); // Clear input after join
+        setInputCode('');
       } else alert('Room not found or full.');
     } catch (e) { alert("Error joining game."); } finally { setLoading(false); }
   };
@@ -217,6 +198,20 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
     setRolling(true);
     
     const dice = Math.floor(Math.random() * 6) + 1;
+    let frames = 15;
+    let delay = 60;
+
+    const animateFrames = async () => {
+      for (let i = 0; i < frames; i++) {
+        setRollingDiceValue(Math.floor(Math.random() * 6) + 1);
+        const frameDelay = delay + (i * 10);
+        await new Promise(r => setTimeout(r, frameDelay));
+      }
+      setRollingDiceValue(dice);
+    };
+
+    await animateFrames();
+    
     const isHost = game.hostId === myProfile.uniqueId;
     let landingPos = (isHost ? game.hostPos : game.guestPos) + dice;
     if (landingPos > BOARD_CELLS) landingPos = isHost ? game.hostPos : game.guestPos;
@@ -224,23 +219,34 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
     const finalPos = LADDERS[landingPos] || SNAKES[landingPos] || landingPos;
     const winnerId = finalPos === BOARD_CELLS ? (isHost ? game.hostId : game.guestId!) : undefined;
 
-    // Fast local UI update before Airtable sync (for better "feel")
-    setTimeout(async () => {
-      setRolling(false);
-      const update = {
-        ...game,
-        hostPos: isHost ? finalPos : game.hostPos,
-        guestPos: !isHost ? finalPos : game.guestPos,
-        lastDice: dice,
-        hostLastDice: isHost ? dice : (game.hostLastDice || 0),
-        guestLastDice: !isHost ? dice : (game.guestLastDice || 0),
-        turn: (game.turn === 'host' ? 'guest' : 'host') as any,
-        winner: winnerId
-      };
-      await dbService.updateGame(update);
-      setGame(update);
-      if (winnerId) await syncMyStatsLocally(winnerId === myProfile.uniqueId, game.id!);
-    }, 450);
+    const update = {
+      ...game,
+      hostPos: isHost ? finalPos : game.hostPos,
+      guestPos: !isHost ? finalPos : game.guestPos,
+      lastDice: dice,
+      hostLastDice: isHost ? dice : (game.hostLastDice || 0),
+      guestLastDice: !isHost ? dice : (game.guestLastDice || 0),
+      turn: (game.turn === 'host' ? 'guest' : 'host') as any,
+      winner: winnerId
+    };
+    
+    await dbService.updateGame(update);
+    setGame(update);
+    if (winnerId) await syncMyStatsLocally(winnerId === myProfile.uniqueId, game.id!);
+    setRolling(false);
+  };
+
+  const renderDiceFace = (val: number, isRolling: boolean) => {
+    const props = { size: 52, className: `drop-shadow-lg ${isRolling ? 'animate-dice-tumble' : 'animate-dice-settle'}` };
+    switch (val) {
+      case 1: return <Dice1 {...props} />;
+      case 2: return <Dice2 {...props} />;
+      case 3: return <Dice3 {...props} />;
+      case 4: return <Dice4 {...props} />;
+      case 5: return <Dice5 {...props} />;
+      case 6: return <Dice6 {...props} />;
+      default: return <Dices {...props} />;
+    }
   };
 
   const getCellCoords = (cell: number) => {
@@ -253,25 +259,22 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
 
   const renderBoard = () => {
     const cells = [];
-    const palette = [
-      'bg-[#f9a8d4]', 'bg-[#fdba74]', 'bg-[#fde047]', 
-      'bg-[#86efac]', 'bg-[#7dd3fc]', 'bg-[#c084fc]',
-    ];
-    
     for (let row = 9; row >= 0; row--) {
-      const isEvenRow = row % 2 !== 0;
+      const isReverseRow = row % 2 !== 0;
       for (let col = 0; col < 10; col++) {
-        const actualCol = isEvenRow ? 9 - col : col;
+        const actualCol = isReverseRow ? 9 - col : col;
         const cellNum = row * 10 + actualCol + 1;
-        const colorIndex = (cellNum * 13) % palette.length;
-        const cellColor = palette[colorIndex];
         
         cells.push(
-          <div key={cellNum} className={`relative flex items-center justify-center border-[0.5px] border-black/10 ${cellColor}`} style={{ width: '10%', aspectRatio: '1/1' }}>
-            <span className="absolute top-0.5 right-1 text-[7px] font-black text-black/40 select-none">{cellNum}</span>
-            {cellNum === 100 && (
-              <div className="absolute inset-0 flex items-center justify-center opacity-40">
-                <Home size={18} className="text-red-800" fill="currentColor" />
+          <div 
+            key={cellNum} 
+            className="relative flex items-center justify-center border-[0.5px] border-black bg-white" 
+            style={{ width: '10%', aspectRatio: '1/1' }}
+          >
+            <span className="absolute top-0.5 left-1 text-[8px] sm:text-[10px] font-black text-black select-none">{cellNum}</span>
+            {cellNum === BOARD_CELLS && (
+              <div className="absolute top-1 right-1">
+                <Star size={16} className="text-yellow-400 fill-yellow-400" />
               </div>
             )}
           </div>
@@ -351,7 +354,7 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 scrollbar-hide">
+      <div className="flex-1 overflow-y-auto px-4 py-4 scrollbar-hide flex flex-col items-center">
         <div className="flex justify-center items-center gap-10 mb-6 mt-2">
            <div className={`p-4 rounded-2xl border-2 flex flex-col items-center shadow-lg transition-all ${game.turn === 'host' ? 'bg-indigo-600/20 border-indigo-500 ring-2 ring-indigo-500/20 scale-105' : 'bg-slate-900/40 border-transparent opacity-30'}`}>
               <span className="text-2xl font-black text-white leading-none">{game.hostLastDice || '-'}</span>
@@ -363,31 +366,33 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
            </div>
         </div>
 
-        <div className="w-full max-w-[95vw] mx-auto aspect-square bg-[#fffbeb] rounded-[1.5rem] border-[12px] border-amber-900 shadow-[0_30px_60px_rgba(0,0,0,0.7)] overflow-hidden relative">
+        <div 
+          className="w-full max-w-[95vw] mx-auto bg-white rounded-xl border-[8px] border-slate-900 shadow-[0_20px_50px_rgba(0,0,0,0.8)] overflow-hidden relative aspect-square"
+        >
           <div className="absolute inset-0 flex flex-wrap z-10">
             {renderBoard()}
           </div>
           
-          <svg className="absolute inset-0 pointer-events-none z-[40] w-full h-full" viewBox="0 0 100 100">
+          <svg className="absolute inset-0 pointer-events-none z-[40] w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
             {Object.entries(LADDERS).map(([start, end]) => {
               const s = getCellCoords(parseInt(start));
               const e = getCellCoords(end);
-              const ladderColor = "#3e1f05";
+              const ladderColor = "#4b2c20";
               const dx = e.x - s.x;
               const dy = e.y - s.y;
               const dist = Math.sqrt(dx * dx + dy * dy);
               const px = -dy / dist;
               const py = dx / dist;
-              const halfWidth = 2.5;
+              const halfWidth = 1.0;
               return (
-                <g key={`ladder-${start}`} className="drop-shadow-md">
-                  <line x1={s.x + px * halfWidth} y1={s.y + py * halfWidth} x2={e.x + px * halfWidth} y2={e.y + py * halfWidth} stroke={ladderColor} strokeWidth="2.5" strokeLinecap="round" />
-                  <line x1={s.x - px * halfWidth} y1={s.y - py * halfWidth} x2={e.x - px * halfWidth} y2={e.y - py * halfWidth} stroke={ladderColor} strokeWidth="2.5" strokeLinecap="round" />
+                <g key={`ladder-${start}`} className="drop-shadow-sm">
+                  <line x1={s.x + px * halfWidth} y1={s.y + py * halfWidth} x2={e.x + px * halfWidth} y2={e.y + py * halfWidth} stroke={ladderColor} strokeWidth="0.8" strokeLinecap="round" />
+                  <line x1={s.x - px * halfWidth} y1={s.y - py * halfWidth} x2={e.x - px * halfWidth} y2={e.y - py * halfWidth} stroke={ladderColor} strokeWidth="0.8" strokeLinecap="round" />
                   {[0.15, 0.3, 0.45, 0.6, 0.75, 0.9].map(r => {
                     const cx = s.x + dx * r;
                     const cy = s.y + dy * r;
                     return (
-                      <line key={r} x1={cx + px * halfWidth} y1={cy + py * halfWidth} x2={cx - px * halfWidth} y2={cy - py * halfWidth} stroke={ladderColor} strokeWidth="1.2" strokeLinecap="round" />
+                      <line key={r} x1={cx + px * halfWidth} y1={cy + py * halfWidth} x2={cx - px * halfWidth} y2={cy - py * halfWidth} stroke={ladderColor} strokeWidth="0.5" strokeLinecap="round" />
                     );
                   })}
                 </g>
@@ -404,40 +409,33 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
               const dist = Math.sqrt(dx*dx + dy*dy);
               const nx = -dy / dist;
               const ny = dx / dist;
-              const amp = (sNum % 2 === 0 ? 12 : -12);
+              const amp = (sNum % 2 === 0 ? 5 : -5);
               const cx1 = s.x + dx/3 + nx * amp;
               const cy1 = s.y + dy/3 + ny * amp;
               const cx2 = s.x + 2*dx/3 - nx * amp;
               const cy2 = s.y + 2*dy/3 - ny * amp;
               return (
-                <g key={`snake-${start}`} className="drop-shadow-[0_4px_6px_rgba(0,0,0,0.4)]">
+                <g key={`snake-${start}`} className="drop-shadow-lg">
                   <path d={`M ${s.x} ${s.y} C ${cx1} ${cy1} ${cx2} ${cy2} ${e.x} ${e.y}`} fill="none" stroke={color} strokeWidth="1.2" strokeLinecap="round" />
-                  <path d={`M ${s.x} ${s.y} C ${cx1} ${cy1} ${cx2} ${cy2} ${e.x} ${e.y}`} fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.6" strokeLinecap="round" strokeDasharray="0.5 1.5" />
-                  <circle cx={s.x} cy={s.y} r="1.4" fill={color} />
-                  <circle cx={s.x - 0.5} cy={s.y - 0.4} r="0.3" fill="white" />
-                  <circle cx={s.x + 0.5} cy={s.y - 0.4} r="0.3" fill="white" />
-                  <circle cx={s.x - 0.5} cy={s.y - 0.4} r="0.15" fill="black" />
-                  <circle cx={s.x + 0.5} cy={s.y - 0.4} r="0.15" fill="black" />
-                  <path d={`M ${s.x} ${s.y-1.4} L ${s.x-0.6} ${s.y-2.6} M ${s.x} ${s.y-1.4} L ${s.x+0.6} ${s.y-2.6}`} stroke="#f43f5e" strokeWidth="0.3" strokeLinecap="round" />
+                  <circle cx={s.x} cy={s.y} r="1" fill={color} />
+                  <circle cx={s.x - 0.3} cy={s.y - 0.2} r="0.25" fill="white" />
+                  <circle cx={s.x + 0.3} cy={s.y - 0.2} r="0.25" fill="white" />
                 </g>
               );
             })}
           </svg>
 
-          {/* Player Markers Layer with slow transitions */}
           <div className="absolute inset-0 z-[60] pointer-events-none">
-            {/* Host Marker */}
             <div 
-              className="absolute w-5 h-5 bg-indigo-600 rounded-full border-2 border-white shadow-xl animate-bounce transition-all ease-in-out duration-700"
+              className="absolute w-4 h-4 bg-indigo-600 rounded-full border-2 border-white shadow-xl animate-bounce transition-all ease-in-out duration-700"
               style={{ 
                 left: `${hostCoords.x}%`, 
                 top: `${hostCoords.y}%`, 
                 transform: 'translate(-50%, -50%)' 
               }}
             />
-            {/* Guest Marker */}
             <div 
-              className="absolute w-5 h-5 bg-emerald-600 rounded-full border-2 border-white shadow-xl animate-bounce transition-all ease-in-out duration-700"
+              className="absolute w-4 h-4 bg-emerald-600 rounded-full border-2 border-white shadow-xl animate-bounce transition-all ease-in-out duration-700"
               style={{ 
                 left: `${guestCoords.x}%`, 
                 top: `${guestCoords.y}%`, 
@@ -466,9 +464,6 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
             <h2 className={`text-4xl font-black uppercase italic tracking-tighter ${iWon ? 'text-white' : 'text-rose-500'}`}>
               {iWon ? 'Winner' : 'Loser'}
             </h2>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60 mt-2">
-              {iWon ? 'Champion of the Arena' : 'Better luck next time'}
-            </p>
             <button onClick={confirmLeave} className="mt-8 px-10 py-4 bg-white text-black rounded-2xl font-black text-[11px] uppercase shadow-xl active:scale-95 transition-all tracking-widest hover:bg-slate-100">BACK TO LOBBY</button>
           </div>
         ) : (
@@ -478,18 +473,14 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
               onClick={rollDice} 
               className={`w-24 h-24 rounded-full flex items-center justify-center transition-all active:scale-75 shadow-[0_0_50px_rgba(79,70,229,0.4)] border-4 border-slate-950 ${isMyTurn && game.guestId && !rolling && !isAnimating ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
             >
-              {rolling ? (
-                <RefreshCw className="animate-spin" size={40} />
-              ) : (
-                <div className="relative">
-                  <Dices size={52} className="drop-shadow-lg" />
-                  {isMyTurn && game.guestId && (
-                    <div className="absolute -top-2 -right-2 w-5 h-5 bg-white rounded-full flex items-center justify-center border-2 border-indigo-600 animate-pulse">
-                      <Zap size={10} fill="currentColor" className="text-indigo-600" />
-                    </div>
-                  )}
-                </div>
-              )}
+              <div className="relative">
+                {rolling ? renderDiceFace(rollingDiceValue, true) : renderDiceFace(game.lastDice || 1, false)}
+                {isMyTurn && game.guestId && !rolling && !isAnimating && (
+                  <div className="absolute -top-2 -right-2 w-5 h-5 bg-white rounded-full flex items-center justify-center border-2 border-indigo-600 animate-pulse">
+                    <Zap size={10} fill="currentColor" className="text-indigo-600" />
+                  </div>
+                )}
+              </div>
             </button>
           </div>
         )}

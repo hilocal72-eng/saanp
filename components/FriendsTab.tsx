@@ -18,12 +18,23 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
   const [sending, setSending] = useState(false);
   const [friendToDelete, setFriendToDelete] = useState<Friend | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+  
   const scrollRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const isAtBottomRef = useRef(true);
 
   const [lastReadTimes, setLastReadTimes] = useState<Record<string, number>>(() => {
     const saved = localStorage.getItem(`read_times_${myProfile.uniqueId}`);
     return saved ? JSON.parse(saved) : {};
   });
+
+  // Track if user is at the bottom of the chat
+  const handleScroll = () => {
+    if (!chatContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+    // 100px threshold to be considered "at the bottom"
+    isAtBottomRef.current = scrollHeight - scrollTop - clientHeight < 100;
+  };
 
   useEffect(() => {
     refreshFriends();
@@ -31,6 +42,7 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
     return () => clearInterval(interval);
   }, [myProfile.name, activeChat?.uniqueId]);
 
+  // Effect for handling scrolling logic
   useEffect(() => {
     if (activeChat) {
       const now = Date.now();
@@ -39,9 +51,23 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
         localStorage.setItem(`read_times_${myProfile.uniqueId}`, JSON.stringify(next));
         return next;
       });
+
+      // If user is at bottom or it's a brand new chat session, scroll down
+      if (isAtBottomRef.current) {
+        scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
     }
-    scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, activeChat]);
+  }, [messages]);
+
+  // Force scroll to bottom when switching chats
+  useEffect(() => {
+    if (activeChat) {
+      isAtBottomRef.current = true;
+      setTimeout(() => {
+        scrollRef.current?.scrollIntoView({ behavior: 'auto' });
+      }, 50);
+    }
+  }, [activeChat?.uniqueId]);
 
   useEffect(() => {
     if (feedback) {
@@ -66,7 +92,10 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
       setFriends(friendsWithMeta);
       if (activeChat) {
          const msgs = await dbService.getMessages(myProfile.name, activeChat.uniqueId);
-         setMessages(msgs);
+         // Update messages state only if length changed to minimize unnecessary re-renders
+         if (msgs.length !== messages.length) {
+            setMessages(msgs);
+         }
       }
     } catch (e) { console.debug("Sync error..."); }
   };
@@ -108,6 +137,8 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
       };
       await dbService.sendMessage(msg);
       setNewMsg('');
+      // Force scroll to bottom after user sends their own message
+      isAtBottomRef.current = true;
       await refreshFriends();
     } catch (e) {
       setFeedback({ type: 'error', message: 'Failed to send' });
@@ -125,7 +156,6 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
   const activeFriends = friends.filter(f => f.status === 'accepted' || (f.status === 'pending' && !f.isIncoming));
 
   if (activeChat) {
-    const isFriendOnline = activeChat.lastSeen && (Date.now() - activeChat.lastSeen < 60000);
     return (
       <div className="flex flex-col h-[100dvh] bg-slate-950 animate-in slide-in-from-right-full duration-300">
         <div className="flex items-center px-6 py-4 border-b border-white/5 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
@@ -134,14 +164,14 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
             <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-black text-xs border border-white/10 shadow-lg shadow-indigo-900/20">{activeChat.name.charAt(0).toUpperCase()}</div>
             <div>
               <h2 className="font-black text-white text-sm leading-none">{activeChat.name}</h2>
-              <span className={`text-[8px] font-black uppercase tracking-widest flex items-center gap-1 mt-1 ${isFriendOnline ? 'text-emerald-400' : 'text-slate-500'}`}>
-                {isFriendOnline && <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>}
-                {isFriendOnline ? 'Online' : 'Away'}
-              </span>
             </div>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 pb-72">
+        <div 
+          ref={chatContainerRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto p-6 space-y-4 pb-72 scroll-smooth"
+        >
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center opacity-30 mt-20"><p className="font-black text-[10px] uppercase tracking-widest text-slate-300">Say hello!</p></div>
           ) : (
@@ -156,7 +186,6 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
           )}
           <div ref={scrollRef} />
         </div>
-        {/* LIFTED HIGHER (bottom-36) TO AVOID BOTTOM NAV OVERLAP */}
         <div className="fixed bottom-36 left-6 right-6 p-2 bg-slate-900/95 backdrop-blur-2xl rounded-2xl border border-white/10 flex gap-2 items-center shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-[100]">
           <input type="text" value={newMsg} onChange={(e) => setNewMsg(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()} placeholder="Type message..." className="flex-1 bg-transparent py-3 px-4 text-sm font-medium outline-none text-white placeholder:text-slate-500 tracking-wide" />
           <button disabled={!newMsg.trim() || sending} onClick={handleSendMessage} className="p-3 bg-indigo-600 text-white rounded-xl active:scale-90 disabled:opacity-50 shadow-lg shadow-indigo-900/40">
