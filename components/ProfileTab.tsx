@@ -165,7 +165,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
           {!isLoggedIn && (
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Username</label>
-              <input type="text" value={name} onChange={(e) => setName(e.target.value.replace(/\s/g, ''))} className="w-full px-5 py-4 rounded-2xl bg-slate-950/50 border border-slate-700/50 focus:border-indigo-500 outline-none transition-all text-white font-bold" placeholder="Username" />
+              <input type="text" value={name} onChange={(e) => setName(e.target.value.replace(/\s/g, ''))} className="w-full px-5 py-4 rounded-2xl bg-slate-950 border border-slate-700 focus:border-indigo-500 outline-none transition-all text-white font-bold" placeholder="Username" />
             </div>
           )}
 
@@ -173,7 +173,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
             <>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Age</label>
-                <input type="number" value={age} onChange={(e) => setAge(e.target.value)} className="w-full px-5 py-4 rounded-2xl bg-slate-950/50 border border-slate-700/50 focus:border-indigo-500 outline-none transition-all text-white font-bold" placeholder="Your age" />
+                <input type="number" value={age} onChange={(e) => setAge(e.target.value)} className="w-full px-5 py-4 rounded-2xl bg-slate-950 border border-slate-700 focus:border-indigo-500 outline-none transition-all text-white font-bold" placeholder="Your age" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Gender</label>
