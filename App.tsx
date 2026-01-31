@@ -73,7 +73,8 @@ const App: React.FC = () => {
     }
   };
 
-  const renderProfileRequired = (title: string, subtitle: string, description: string, icon: React.ReactNode) => (
+  // Fixed: Changed icon type to React.ReactElement<any> to satisfy cloneElement requirements
+  const renderProfileRequired = (title: string, subtitle: string, description: string, icon: React.ReactElement<any>) => (
     <div className="relative flex flex-col items-center justify-center h-[100dvh] p-8 text-center animate-in fade-in zoom-in-95 bg-slate-950 overflow-hidden">
       {/* GAMING BACKGROUND ELEMENTS */}
       <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
@@ -118,7 +119,8 @@ const App: React.FC = () => {
                <Trophy size={24} className="absolute bottom-4 right-4 text-white/5 rotate-12" />
                <Zap size={24} className="absolute top-1/2 right-2 text-white/5 -translate-y-1/2" />
                <div className="relative z-10 text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.4)]">
-                 {React.cloneElement(icon as React.ReactElement, { size: 72, strokeWidth: 2.5 })}
+                 {/* Fixed: Removed manual cast to fix TS overload mismatch error */}
+                 {React.cloneElement(icon, { size: 72, strokeWidth: 2.5 })}
                </div>
                <div className="absolute inset-0 w-1/2 h-full bg-white/5 skew-x-[-20deg] animate-[shine_3s_infinite] pointer-events-none"></div>
             </div>
