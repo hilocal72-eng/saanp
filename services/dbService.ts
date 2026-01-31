@@ -48,7 +48,9 @@ const parseGame = (record: any): GameState => {
     guestPos: Number(f.guestPos) || 1,
     turn: (f.turn === 'guest' ? 'guest' : 'host') as 'host' | 'guest',
     winner: f.winner ? String(f.winner) : undefined,
-    lastDice: Number(f.lastDice) || 0
+    lastDice: Number(f.lastDice) || 0,
+    hostLastDice: Number(f.hostLastDice) || 0,
+    guestLastDice: Number(f.guestLastDice) || 0
   };
 };
 
@@ -134,9 +136,21 @@ export const dbService = {
       return data.records.map((r: any) => {
         const f = r.fields;
         const friendUid = f.user1Id === myUsername ? f.user2Id : f.user1Id;
-        return { id: friendUid, name: friendUid, uniqueId: friendUid, status: f.status, isIncoming: f.user2Id === myUsername && f.status === 'pending' };
+        return { 
+          id: r.id, 
+          name: friendUid, 
+          uniqueId: friendUid, 
+          status: f.status, 
+          isIncoming: f.user2Id === myUsername && f.status === 'pending' 
+        };
       });
     } catch (e) { return []; }
+  },
+
+  removeFriend: async (recordId: string): Promise<void> => {
+    await airtableFetch(`${AIRTABLE_CONFIG.TABLES.FRIENDS}/${recordId}`, {
+      method: 'DELETE'
+    });
   },
 
   sendFriendRequest: async (myUsername: string, targetUsername: string): Promise<boolean> => {
@@ -212,6 +226,8 @@ export const dbService = {
       guestPos: 1, 
       turn: 'host', 
       lastDice: 0, 
+      hostLastDice: 0,
+      guestLastDice: 0,
       lastUpdated: Date.now() 
     };
     const result = await airtableFetch(AIRTABLE_CONFIG.TABLES.GAMES, {
@@ -221,23 +237,30 @@ export const dbService = {
     return parseGame(result.records[0]);
   },
 
-  joinGame: async (guestName: string, code: string): Promise<GameState | null> => {
+  joinGame: async (guestName: string, code: string): Promise<{ game?: GameState, error?: string }> => {
     try {
-      const formula = `AND({code}='${code}', OR({guestId}='', {guestId}=BLANK()))`;
+      const formula = `{code}='${code}'`;
       const data = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.GAMES}?filterByFormula=${encodeURIComponent(formula)}`);
       
-      if (data.records && data.records.length > 0) {
-        const gameId = data.records[0].id;
-        const result = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.GAMES}/${gameId}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ fields: { guestId: guestName, lastUpdated: Date.now() } })
-        });
-        return parseGame(result);
+      if (!data.records || data.records.length === 0) {
+        return { error: 'ROOM_NOT_FOUND' };
       }
-      return null;
+
+      const record = data.records[0];
+      const f = record.fields;
+
+      if (f.guestId && f.guestId !== guestName) {
+        return { error: 'ROOM_FULL' };
+      }
+
+      const gameId = record.id;
+      const result = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.GAMES}/${gameId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ fields: { guestId: guestName, lastUpdated: Date.now() } })
+      });
+      return { game: parseGame(result) };
     } catch (e) {
-      console.error("Join Game Error:", e);
-      return null;
+      return { error: 'NETWORK_ERROR' };
     }
   },
 
@@ -247,6 +270,12 @@ export const dbService = {
     await airtableFetch(`${AIRTABLE_CONFIG.TABLES.GAMES}/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ fields: { ...fields, lastUpdated: Date.now() } })
+    });
+  },
+
+  deleteGame: async (gameId: string) => {
+    await airtableFetch(`${AIRTABLE_CONFIG.TABLES.GAMES}/${gameId}`, {
+      method: 'DELETE'
     });
   },
 

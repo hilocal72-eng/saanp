@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Friend, UserProfile, ChatMessage } from '../types';
 import { dbService } from '../services/dbService';
-import { UserPlus, MessageCircle, ArrowLeft, Send, Users, Bell, Loader2, Sparkles, Search } from 'lucide-react';
+import { UserPlus, MessageCircle, ArrowLeft, Send, Users, Bell, Loader2, Sparkles, Search, Trash2, Frown, X } from 'lucide-react';
 
 interface FriendsTabProps {
   myProfile: UserProfile;
@@ -16,6 +16,7 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
   const [newMsg, setNewMsg] = useState('');
   const [searching, setSearching] = useState(false);
   const [sending, setSending] = useState(false);
+  const [friendToDelete, setFriendToDelete] = useState<Friend | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Track unread timestamps locally
@@ -46,7 +47,6 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
     try {
       const list = await dbService.getFriends(myProfile.name);
       
-      // Calculate unread status for each friend
       const friendsWithMeta = await Promise.all(list.map(async (f) => {
         const msgs = await dbService.getMessages(myProfile.name, f.uniqueId);
         const lastMsg = msgs[msgs.length - 1];
@@ -68,7 +68,6 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
            return prev;
          });
          
-         // Update chat context if friend profile changed (e.g. online status)
          const updatedActiveFriend = friendsWithMeta.find(f => f.uniqueId === activeChat.uniqueId);
          if (updatedActiveFriend && updatedActiveFriend.lastSeen !== activeChat.lastSeen) {
            setActiveChat(updatedActiveFriend);
@@ -104,6 +103,21 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
     }
   };
 
+  const handleDeleteFriend = async (f: Friend) => {
+    setFriendToDelete(f);
+  };
+
+  const confirmDeleteFriend = async () => {
+    if (!friendToDelete) return;
+    try {
+      await dbService.removeFriend(friendToDelete.id);
+      setFriendToDelete(null);
+      refreshFriends();
+    } catch (err) {
+      alert("Failed to remove friend.");
+    }
+  };
+
   const handleAccept = async (friendUsername: string) => {
     await dbService.acceptFriend(myProfile.name, friendUsername);
     refreshFriends();
@@ -125,7 +139,6 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
     
     try {
       await dbService.sendMessage(msg);
-      // Mark as read immediately when I send a message
       setLastReadTimes(prev => {
         const next = { ...prev, [activeChat.uniqueId]: Date.now() };
         localStorage.setItem(`read_times_${myProfile.uniqueId}`, JSON.stringify(next));
@@ -173,7 +186,6 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
         <div className="flex-1 overflow-y-auto p-6 space-y-4 pb-48">
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center opacity-30">
-              <Sparkles size={48} className="mb-4 text-indigo-400" />
               <p className="font-black text-[10px] uppercase tracking-widest text-slate-300">Say hello!</p>
             </div>
           ) : (
@@ -218,6 +230,35 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
 
   return (
     <div className="flex flex-col h-[100dvh] bg-slate-950 animate-in fade-in duration-500">
+      {/* DELETE CONFIRMATION MODAL */}
+      {friendToDelete && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
+          <div className="bg-slate-900 border border-rose-500/30 p-8 rounded-[2rem] shadow-[0_0_80px_rgba(244,63,94,0.1)] text-center max-w-xs w-full">
+            <div className="w-16 h-16 bg-rose-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-rose-500/30">
+              <Frown size={32} className="text-rose-500" />
+            </div>
+            <h2 className="text-xl font-black text-white uppercase tracking-tighter leading-tight mb-2">Remove Friend?</h2>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed mb-8">
+              Are you sure you want to remove <span className="text-white">@{friendToDelete.name}</span> from your squad?
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button 
+                onClick={() => setFriendToDelete(null)}
+                className="w-full bg-slate-800 text-white font-black py-4 rounded-xl active:scale-95 transition-all text-[9px] tracking-widest uppercase border border-white/5"
+              >
+                CANCEL
+              </button>
+              <button 
+                onClick={confirmDeleteFriend}
+                className="w-full bg-rose-600 text-white font-black py-4 rounded-xl shadow-lg shadow-rose-900/40 active:scale-95 transition-all text-[9px] tracking-widest uppercase"
+              >
+                REMOVE
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="p-8 pb-4 sticky top-0 z-10 bg-slate-950/90 backdrop-blur-md">
         <h1 className="text-3xl font-black text-white tracking-tighter uppercase leading-none">Social<br/><span className="text-indigo-500">Center</span></h1>
       </div>
@@ -237,7 +278,6 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
                   </div>
                   <div>
                     <h4 className="font-black text-white text-xs uppercase">{f.name}</h4>
-                    <p className="text-[8px] font-mono font-bold text-slate-300 uppercase tracking-tighter">Wants to be friends</p>
                   </div>
                 </div>
                 <button 
@@ -251,9 +291,7 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
           </div>
         )}
 
-        {/* MODERNIZED SEARCH / ADD SECTION */}
         <div className="bg-slate-900 border border-white/5 p-6 rounded-[2.5rem] shadow-2xl relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/10 blur-3xl -mr-10 -mt-10 group-hover:bg-blue-600/20 transition-colors"></div>
           <h3 className="text-slate-200 font-black text-[10px] mb-4 uppercase tracking-widest flex items-center gap-2">
             <Search size={14} className="text-blue-400" /> Find Players
           </h3>
@@ -269,14 +307,9 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
               type="button"
               onClick={handleAddFriend}
               disabled={searching}
-              aria-label="Add Friend"
-              className="w-14 h-14 shrink-0 bg-gradient-to-br from-blue-500 to-blue-700 text-white rounded-2xl flex items-center justify-center transition-all duration-300 active:scale-90 hover:scale-105 disabled:opacity-50 shadow-[0_8px_20px_rgba(59,130,246,0.4)] hover:shadow-[0_12px_25px_rgba(59,130,246,0.6)] cursor-pointer"
+              className="w-14 h-14 shrink-0 bg-gradient-to-br from-blue-500 to-blue-700 text-white rounded-2xl flex items-center justify-center transition-all duration-300 active:scale-90 hover:scale-105 disabled:opacity-50 shadow-[0_8px_20px_rgba(59,130,246,0.4)] cursor-pointer"
             >
-              {searching ? (
-                <Loader2 size={20} className="animate-spin" />
-              ) : (
-                <UserPlus size={24} strokeWidth={2} />
-              )}
+              {searching ? <Loader2 size={20} className="animate-spin" /> : <UserPlus size={24} strokeWidth={2} />}
             </button>
           </div>
         </div>
@@ -324,13 +357,24 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
                       </div>
                     </div>
                     
-                    {f.status === 'pending' ? (
-                      <span className="px-3 py-1 bg-slate-950 text-slate-400 rounded-lg text-[8px] font-black border border-slate-800 uppercase tracking-widest">Waiting</span>
-                    ) : (
-                      <div className={`p-3 rounded-xl transition-all border ${hasUnread ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-slate-950 text-indigo-400 border-slate-800 hover:bg-indigo-600 hover:text-white'}`}>
-                        <MessageCircle size={18} />
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {f.status === 'accepted' && (
+                        <>
+                           <div className={`p-3 rounded-xl transition-all border ${hasUnread ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-slate-950 text-indigo-400 border-slate-800 hover:bg-indigo-600 hover:text-white'}`}>
+                              <MessageCircle size={18} />
+                           </div>
+                           <button 
+                            onClick={(e) => { e.stopPropagation(); handleDeleteFriend(f); }}
+                            className="p-3 rounded-xl bg-slate-950 text-slate-500 border border-slate-800 hover:bg-rose-500 hover:text-white hover:border-rose-500 transition-all"
+                           >
+                             <Trash2 size={18} />
+                           </button>
+                        </>
+                      )}
+                      {f.status === 'pending' && (
+                        <span className="px-3 py-1 bg-slate-950 text-slate-400 rounded-lg text-[8px] font-black border border-slate-800 uppercase tracking-widest">Waiting</span>
+                      )}
+                    </div>
                   </div>
                 );
               })}

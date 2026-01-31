@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { GameState, UserProfile } from '../types';
 import { dbService } from '../services/dbService';
 import { LADDERS, SNAKES, BOARD_CELLS } from '../constants';
-import { Trophy, RefreshCw, Loader2, Dices, Sword } from 'lucide-react';
+import { Trophy, RefreshCw, Loader2, Dices, Sword, AlertCircle, X, LogOut, HelpCircle } from 'lucide-react';
 
 interface GameTabProps {
   myProfile: UserProfile | null;
@@ -16,6 +16,8 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
   const [rolling, setRolling] = useState(false);
   const [isSliding, setIsSliding] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showFullModal, setShowFullModal] = useState(false);
+  const [showQuitModal, setShowQuitModal] = useState(false);
 
   useEffect(() => {
     let interval: any;
@@ -49,11 +51,15 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
     if (inputCode.length !== 4) return;
     setLoading(true);
     try {
-      const joined = await dbService.joinGame(myProfile.uniqueId, inputCode);
-      if (joined) {
-        setGame(joined);
+      const result = await dbService.joinGame(myProfile.uniqueId, inputCode);
+      if (result.game) {
+        setGame(result.game);
+      } else if (result.error === 'ROOM_FULL') {
+        setShowFullModal(true);
+      } else if (result.error === 'ROOM_NOT_FOUND') {
+        alert('Room not found. Check the code.');
       } else {
-        alert('Room not found or already full');
+        alert('Could not join room. Try again.');
       }
     } catch (e) {
       alert("Error joining game.");
@@ -66,15 +72,40 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
     await dbService.incrementStats(winnerId, true);
     await dbService.incrementStats(loserId, false);
     
-    // Refresh local profile data if we are one of the participants
     if (myProfile && (myProfile.name === winnerId || myProfile.name === loserId)) {
       const updated = await dbService.findPlayerGlobal(myProfile.name);
       if (updated) {
         const db = { users: [updated], friends: [], chats: [], games: [] };
         localStorage.setItem('snake_quest_db', JSON.stringify(db));
-        // Note: Ideally we'd trigger a parent state refresh here, but let's rely on tab switch/refresh for simplicity
       }
     }
+  };
+
+  const handleLeaveRoom = () => {
+    if (!game) return;
+    if (game.guestId && !game.winner) {
+      setShowQuitModal(true);
+    } else {
+      confirmLeave();
+    }
+  };
+
+  const confirmLeave = async () => {
+    if (!game) return;
+    const isHost = game.hostId === myProfile?.uniqueId;
+
+    if (game.guestId && !game.winner) {
+      const winnerId = isHost ? game.guestId : game.hostId;
+      const loserId = isHost ? game.hostId : game.guestId;
+      await handleGameEnd(winnerId, loserId);
+    }
+
+    if (game.id && (game.winner || !game.guestId)) {
+      await dbService.deleteGame(game.id);
+    }
+    
+    setGame(null);
+    setShowQuitModal(false);
   };
 
   const rollDice = async () => {
@@ -104,7 +135,9 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
         ...game,
         hostPos: isHost ? landingPos : game.hostPos,
         guestPos: !isHost ? landingPos : game.guestPos,
-        lastDice: dice
+        lastDice: dice,
+        hostLastDice: isHost ? dice : (game.hostLastDice || 0),
+        guestLastDice: !isHost ? dice : (game.guestLastDice || 0)
       };
       setGame(midGame);
       setRolling(false);
@@ -191,6 +224,30 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
   if (!game) {
     return (
       <div className="flex flex-col min-h-[100dvh] bg-slate-950 p-6 animate-in fade-in duration-700">
+        {/* ROOM FULL MODAL */}
+        {showFullModal && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
+            <div className="bg-slate-900 border border-amber-500/30 p-10 rounded-[2.5rem] shadow-[0_0_80px_rgba(245,158,11,0.1)] text-center max-w-xs w-full relative">
+              <button onClick={() => setShowFullModal(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors">
+                <X size={20} />
+              </button>
+              <div className="w-20 h-20 bg-amber-500/20 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                <AlertCircle size={48} className="text-amber-500" />
+              </div>
+              <h2 className="text-3xl font-black text-white uppercase tracking-tighter leading-tight mb-2">Arena Full</h2>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
+                This battle room already has two legendary fighters. Try joining another code!
+              </p>
+              <button 
+                onClick={() => setShowFullModal(false)}
+                className="mt-10 w-full bg-white text-black font-black py-4 rounded-2xl shadow-xl active:scale-95 transition-all text-[11px] tracking-widest uppercase"
+              >
+                GOT IT
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="flex-1 flex flex-col justify-center items-center gap-10">
           <div className="text-center">
             <div className="w-24 h-24 bg-indigo-600 rounded-[2rem] flex items-center justify-center mx-auto mb-8 text-white shadow-2xl">
@@ -224,33 +281,59 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
 
   return (
     <div className="flex flex-col h-[100dvh] bg-slate-950 text-white overflow-hidden animate-in zoom-in-95 duration-500">
+      {/* QUIT MODAL */}
+      {showQuitModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-300">
+          <div className="bg-slate-900 border border-rose-500/30 p-8 rounded-[2rem] shadow-[0_0_80px_rgba(244,63,94,0.1)] text-center max-w-xs w-full relative">
+            <div className="w-16 h-16 bg-rose-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <HelpCircle size={32} className="text-rose-500" />
+            </div>
+            <h2 className="text-2xl font-black text-white uppercase tracking-tighter leading-tight mb-2">Quit Match?</h2>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed mb-8">
+              Leaving mid-battle results in a loss. Surrender?
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button 
+                onClick={() => setShowQuitModal(false)}
+                className="w-full bg-slate-800 text-white font-black py-4 rounded-xl active:scale-95 transition-all text-[9px] tracking-widest uppercase border border-white/5"
+              >
+                NO
+              </button>
+              <button 
+                onClick={confirmLeave}
+                className="w-full bg-rose-600 text-white font-black py-4 rounded-xl shadow-lg shadow-rose-900/40 active:scale-95 transition-all text-[9px] tracking-widest uppercase"
+              >
+                YES, QUIT
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="px-6 py-4 flex items-center justify-between border-b border-white/5 bg-slate-900/50 backdrop-blur-md sticky top-0 z-[100]">
         <div className="flex flex-col">
           <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Global Room</span>
           <span className="text-sm font-black text-indigo-400">#{game.code}</span>
         </div>
-        <button onClick={() => setGame(null)} className="px-4 py-2 bg-rose-500/10 text-rose-500 rounded-xl text-[9px] font-black border border-rose-500/20 active:scale-90 transition-transform">LEAVE ROOM</button>
+        <button onClick={handleLeaveRoom} className="px-4 py-2 bg-rose-500/10 text-rose-500 rounded-xl text-[9px] font-black border border-rose-500/20 active:scale-90 transition-transform">LEAVE ROOM</button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 pb-44">
+      <div className="flex-1 overflow-y-auto px-4 py-4 pb-56">
         <div className="relative flex items-center justify-between gap-4 mb-8 mt-2 px-2">
            <div className={`flex-1 flex flex-col items-center justify-center p-3 rounded-3xl border transition-all duration-500 ${game.turn === 'host' ? 'bg-indigo-600/30 border-indigo-500 shadow-[0_0_20px_rgba(79,70,229,0.4)] scale-105' : 'bg-slate-900/40 border-slate-800 opacity-40'}`}>
               <div className="text-center">
                 <span className="text-[10px] font-black text-white uppercase truncate max-w-[80px] block tracking-tighter">{game.hostId}</span>
               </div>
-              {game.turn === 'host' && <div className="absolute -bottom-1 w-1 h-1 bg-indigo-500 rounded-full animate-ping"></div>}
            </div>
 
            <div className="z-10 bg-slate-950 px-2 py-3 border border-white/10 rounded-full flex flex-col items-center justify-center">
               <Sword size={12} className="text-slate-500" />
-              <span className="text-[5px] font-black text-slate-600 mt-0.5 uppercase">VS</span>
            </div>
 
            <div className={`flex-1 flex flex-col items-center justify-center p-3 rounded-3xl border transition-all duration-500 ${game.turn === 'guest' ? 'bg-emerald-600/30 border-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.4)] scale-105' : 'bg-slate-900/40 border-slate-800 opacity-40'}`}>
               <div className="text-center">
                 <span className="text-[10px] font-black text-white uppercase truncate max-w-[80px] block tracking-tighter">{game.guestId || 'WAITING'}</span>
               </div>
-              {game.turn === 'guest' && <div className="absolute -bottom-1 w-1 h-1 bg-emerald-500 rounded-full animate-ping"></div>}
            </div>
         </div>
 
@@ -310,35 +393,51 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
             <div className="bg-indigo-600 p-6 rounded-[2rem] flex flex-col items-center gap-2 shadow-2xl">
               <Trophy size={40} className="text-white mb-2" />
               <h2 className="text-xl font-black text-white uppercase tracking-tighter">{game.winner} WON THE BATTLE!</h2>
-              <button onClick={() => setGame(null)} className="mt-2 px-8 py-3 bg-white text-black rounded-xl font-black text-[10px] uppercase active:scale-95 transition-transform">BACK TO MENU</button>
+              <button onClick={handleLeaveRoom} className="mt-2 px-8 py-3 bg-white text-black rounded-xl font-black text-[10px] uppercase active:scale-95 transition-transform">BACK TO MENU</button>
             </div>
           </div>
         ) : (
-          <div className="w-full flex flex-col items-center gap-4 pb-24">
-            <div className="relative group">
-               <div className={`w-28 h-28 rounded-[3rem] border-4 flex items-center justify-center shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 relative overflow-hidden
-                  ${rolling ? 'animate-bounce border-indigo-400 shadow-indigo-500/40 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500' : 
-                  'border-white/20 bg-gradient-to-br from-slate-800 to-slate-900 opacity-100'}`}>
-                  <div className={`absolute inset-0 bg-white/10 blur-xl rounded-full scale-75 ${rolling ? 'opacity-100' : 'opacity-0'}`}></div>
-                  <span className={`text-6xl font-black text-white drop-shadow-[0_4px_15px_rgba(0,0,0,0.8)] z-10 transition-transform ${rolling ? 'scale-110' : 'scale-100'}`}>
-                    {game.lastDice || '?'}
-                  </span>
+          <div className="w-full flex flex-col items-center gap-4 pb-28">
+            <div className="flex items-center gap-6 relative">
+               {/* HOST DICE (RED) */}
+               <div className="flex flex-col items-center gap-2">
+                 <div className={`w-20 h-20 rounded-[2.5rem] border-4 flex items-center justify-center shadow-[0_10px_40px_rgba(225,29,72,0.4)] transition-all duration-300 relative overflow-hidden border-rose-500/30
+                    ${(rolling && game.turn === 'host') ? 'animate-bounce border-rose-400 bg-rose-600 scale-110 shadow-rose-500/60' : 
+                    'bg-rose-900/40 opacity-100'}`}>
+                    <span className="text-4xl font-black text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] z-10">
+                      {game.hostLastDice || '-'}
+                    </span>
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent"></div>
+                 </div>
+                 <span className="text-[7px] font-black uppercase text-rose-400 tracking-[0.2em]">HOST DICE</span>
+               </div>
+
+               <div className="h-10 w-[1px] bg-white/10"></div>
+
+               {/* GUEST DICE (RED) */}
+               <div className="flex flex-col items-center gap-2">
+                 <div className={`w-20 h-20 rounded-[2.5rem] border-4 flex items-center justify-center shadow-[0_10px_40px_rgba(225,29,72,0.4)] transition-all duration-300 relative overflow-hidden border-rose-500/30
+                    ${(rolling && game.turn === 'guest') ? 'animate-bounce border-rose-400 bg-rose-600 scale-110 shadow-rose-500/60' : 
+                    'bg-rose-900/40 opacity-100'}`}>
+                    <span className="text-4xl font-black text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] z-10">
+                      {game.guestLastDice || '-'}
+                    </span>
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent"></div>
+                 </div>
+                 <span className="text-[7px] font-black uppercase text-rose-400 tracking-[0.2em]">GUEST DICE</span>
                </div>
                
                <button 
                 disabled={!isMyTurn || rolling || isSliding || !game.guestId} 
                 onClick={rollDice} 
-                className={`absolute -bottom-1 -right-1 w-14 h-14 rounded-2xl flex items-center justify-center transition-all active:scale-75 shadow-2xl z-[110] border-2 border-white/20
+                className={`absolute -bottom-8 left-1/2 -translate-x-1/2 w-16 h-16 rounded-full flex items-center justify-center transition-all active:scale-75 shadow-2xl z-[110] border-4 border-slate-950
                   ${isMyTurn && game.guestId && !rolling && !isSliding 
                     ? 'bg-rose-600 text-white cursor-pointer hover:bg-rose-500 shadow-rose-500/50' 
                     : 'bg-slate-800 text-slate-600 cursor-not-allowed opacity-50'}`}
                >
-                 {rolling ? <RefreshCw className="animate-spin" size={28} /> : <Dices size={28} className="text-white" />}
+                 {rolling ? <RefreshCw className="animate-spin" size={24} /> : <Dices size={24} className="text-white" />}
                </button>
             </div>
-            <p className={`text-[10px] font-black uppercase tracking-[0.4em] transition-all duration-300 ${isMyTurn ? 'text-indigo-400 animate-pulse' : 'text-slate-600'}`}>
-              {isMyTurn ? "Your Strategy Turn" : "Waiting for Enemy"}
-            </p>
           </div>
         )}
       </div>

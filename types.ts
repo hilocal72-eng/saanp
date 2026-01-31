@@ -39,7 +39,9 @@ export interface GameState {
   guestPos: number;
   turn: 'host' | 'guest';
   winner?: string;
-  lastDice: number;
+  lastDice: number; // For backward compatibility
+  hostLastDice?: number;
+  guestLastDice?: number;
 }
 
 export enum Tab {
