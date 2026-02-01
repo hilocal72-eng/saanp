@@ -5,7 +5,7 @@ export interface UserProfile {
   id?: string;
   uniqueId: string;
   name: string;
-  age: number;
+  pin: string;
   gender: Gender;
   lastSeen?: number; // Timestamp
   wins?: number;

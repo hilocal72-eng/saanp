@@ -4,7 +4,7 @@ import { GameState, UserProfile } from '../types';
 import { dbService } from '../services/dbService';
 import { LADDERS, SNAKES, BOARD_CELLS } from '../constants';
 import { 
-  Trophy, Sword, Zap, Frown, Star, Dice1, Dice2, Dice3, Dice4, Dice5, Dice6
+  Trophy, Sword, Zap, Frown, Star
 } from 'lucide-react';
 
 interface GameTabProps {
@@ -17,12 +17,10 @@ interface GameTabProps {
 const Pawn = ({ color, className }: { color: string, className?: string }) => (
   <svg 
     viewBox="0 0 40 60" 
-    className={`w-full h-full drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)] ${className}`}
+    className={`w-full h-full drop-shadow-[0_4px_4px_rgba(0,0,0,0.4)] ${className}`}
     style={{ color }}
   >
-    {/* Head */}
     <circle cx="20" cy="15" r="10" fill="currentColor" stroke="black" strokeWidth="3" />
-    {/* Body */}
     <path 
       d="M20 25 C14 25 10 28 10 32 L6 50 C6 54 10 56 14 56 L26 56 C30 56 34 54 34 50 L30 32 C30 28 26 25 20 25 Z" 
       fill="currentColor" 
@@ -30,12 +28,11 @@ const Pawn = ({ color, className }: { color: string, className?: string }) => (
       strokeWidth="3" 
       strokeLinejoin="round"
     />
-    {/* Subtle highlight */}
     <circle cx="17" cy="12" r="3" fill="white" opacity="0.3" />
   </svg>
 );
 
-// Single Isometric Die matching the screenshot style
+// Single Isometric Die
 const IsometricDie = ({ value, rolling }: { value: number, rolling: boolean }) => {
   return (
     <svg 
@@ -44,10 +41,9 @@ const IsometricDie = ({ value, rolling }: { value: number, rolling: boolean }) =
       style={{ filter: 'drop-shadow(0 8px 12px rgba(0,0,0,0.4))' }}
     >
       <g transform="translate(25, 20)">
-        {/* Die Body */}
-        <path d="M25 0 L50 15 L25 30 L0 15 Z" fill="#ffdf5e" stroke="black" strokeWidth="2.5" /> {/* Top */}
-        <path d="M0 15 L25 30 L25 60 L0 45 Z" fill="#ffce00" stroke="black" strokeWidth="2.5" /> {/* Left */}
-        <path d="M25 30 L50 15 L50 45 L25 60 Z" fill="#ffe98a" stroke="black" strokeWidth="2.5" /> {/* Right */}
+        <path d="M25 0 L50 15 L25 30 L0 15 Z" fill="#ffdf5e" stroke="black" strokeWidth="2.5" />
+        <path d="M0 15 L25 30 L25 60 L0 45 Z" fill="#ffce00" stroke="black" strokeWidth="2.5" />
+        <path d="M25 30 L50 15 L50 45 L25 60 Z" fill="#ffe98a" stroke="black" strokeWidth="2.5" />
         
         <g className="pips">
            {value === 1 && <circle cx="25" cy="15" r="4" fill="#ff9100" stroke="black" strokeWidth="0.5" />}
@@ -92,10 +88,6 @@ const IsometricDie = ({ value, rolling }: { value: number, rolling: boolean }) =
              </>
            )}
         </g>
-        
-        <circle cx="12" cy="35" r="2" fill="black" opacity="0.6" />
-        <circle cx="12" cy="45" r="2" fill="black" opacity="0.6" />
-        <circle cx="38" cy="35" r="2" fill="black" opacity="0.6" />
       </g>
     </svg>
   );
@@ -146,20 +138,36 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
     const timer = setTimeout(() => {
       setIsAnimating(true);
 
-      if (!hostDone) {
-        setVisualHostPos(current => {
-          if (LADDERS[current] === game.hostPos || SNAKES[current] === game.hostPos) return game.hostPos;
-          return current < game.hostPos ? current + 1 : current - 1;
-        });
-      }
+      const calculateNextPos = (current: number, target: number) => {
+        // If current is already at a head leading to final target, slide/jump now
+        if (SNAKES[current] === target || LADDERS[current] === target) {
+          return target;
+        }
 
-      if (!guestDone) {
-        setVisualGuestPos(current => {
-          if (LADDERS[current] === game.guestPos || SNAKES[current] === game.guestPos) return game.guestPos;
-          return current < game.guestPos ? current + 1 : current - 1;
-        });
-      }
-    }, 180);
+        // Determine if we need to walk to a shortcut head first
+        const head = Object.keys(SNAKES).map(Number).find(k => SNAKES[k] === target) || 
+                     Object.keys(LADDERS).map(Number).find(k => LADDERS[k] === target);
+        
+        const walkTarget = head || target;
+
+        if (current < walkTarget) {
+          return current + 1; // Walk forward cell by cell
+        }
+        
+        // If we overshot or are in a weird state, snap to target
+        if (current > walkTarget) {
+          return target;
+        }
+
+        // If current === walkTarget but not yet target, it means we are at the head.
+        // We stay here for one tick (the next setTimeout) to create a visual pause.
+        return current;
+      };
+
+      if (!hostDone) setVisualHostPos(prev => calculateNextPos(prev, game.hostPos));
+      if (!guestDone) setVisualGuestPos(prev => calculateNextPos(prev, game.guestPos));
+
+    }, 220); // stepping speed
 
     return () => clearTimeout(timer);
   }, [game?.hostPos, game?.guestPos, visualHostPos, visualGuestPos]);
@@ -294,8 +302,8 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
         const actualCol = isReverseRow ? 9 - col : col;
         const cellNum = row * 10 + actualCol + 1;
         cells.push(
-          <div key={cellNum} className="relative flex items-center justify-center border-[0.5px] border-black/20 bg-white" style={{ width: '10%', aspectRatio: '1/1' }}>
-            <span className="absolute top-0.5 left-1 text-[9px] sm:text-[11px] font-black text-slate-950 select-none drop-shadow-sm">{cellNum}</span>
+          <div key={cellNum} className="relative flex items-center justify-center border-[0.5px] border-black/10 bg-white" style={{ width: '10%', aspectRatio: '1/1' }}>
+            <span className="absolute top-0.5 left-1 text-[9px] sm:text-[11px] font-black text-slate-900/40 select-none">{cellNum}</span>
             {cellNum === BOARD_CELLS && <div className="absolute top-1 right-1"><Star size={14} className="text-yellow-400 fill-yellow-400" /></div>}
           </div>
         );
@@ -311,7 +319,7 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
   const sameCell = visualHostPos === visualGuestPos;
 
   const getSnakeColor = (start: number) => {
-    const snakeColors = ["#ef4444", "#a855f7", "#10b981", "#3b82f6", "#f59e0b", "#9f1239"];
+    const snakeColors = ["#ef4444", "#a855f7", "#10b981", "#3b82f6", "#f59e0b"];
     return snakeColors[start % snakeColors.length];
   };
 
@@ -358,14 +366,14 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col items-center">
-        <div className="flex justify-center items-center gap-6 mb-4">
-           <div className={`px-4 py-2.5 rounded-2xl border flex flex-col items-center shadow-lg transition-all min-w-[80px] ${game.turn === 'host' ? 'bg-indigo-600/20 border-indigo-500 scale-105' : 'bg-slate-900/40 border-transparent opacity-30'}`}>
-              <span className="text-xl font-black text-white leading-tight">{game.hostLastDice || '-'}</span>
-              <span className="text-[7px] font-black mt-0.5 uppercase text-indigo-400 tracking-widest truncate max-w-[60px]">{game.hostId}</span>
+        <div className="flex justify-center items-center gap-4 mb-4">
+           <div className={`px-3 py-1.5 rounded-xl border flex flex-col items-center shadow-lg transition-all min-w-[70px] ${game.turn === 'host' ? 'bg-indigo-600/20 border-indigo-500 scale-105' : 'bg-slate-900/40 border-transparent opacity-30'}`}>
+              <span className="text-lg font-black text-white leading-none">{game.hostLastDice || '-'}</span>
+              <span className="text-[6px] font-black mt-0.5 uppercase text-indigo-400 tracking-widest truncate max-w-[55px]">{game.hostId}</span>
            </div>
-           <div className={`px-4 py-2.5 rounded-2xl border flex flex-col items-center shadow-lg transition-all min-w-[80px] ${game.turn === 'guest' ? 'bg-emerald-600/20 border-emerald-500 scale-105' : 'bg-slate-900/40 border-transparent opacity-30'}`}>
-              <span className="text-xl font-black text-white leading-tight">{game.guestLastDice || '-'}</span>
-              <span className="text-[7px] font-black mt-0.5 uppercase text-emerald-400 tracking-widest truncate max-w-[60px]">{game.guestId || 'Lobby...'}</span>
+           <div className={`px-3 py-1.5 rounded-xl border flex flex-col items-center shadow-lg transition-all min-w-[70px] ${game.turn === 'guest' ? 'bg-emerald-600/20 border-emerald-500 scale-105' : 'bg-slate-900/40 border-transparent opacity-30'}`}>
+              <span className="text-lg font-black text-white leading-none">{game.guestLastDice || '-'}</span>
+              <span className="text-[6px] font-black mt-0.5 uppercase text-emerald-400 tracking-widest truncate max-w-[55px]">{game.guestId || 'Lobby...'}</span>
            </div>
         </div>
 
@@ -426,22 +434,24 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame }) => {
           <div className="absolute inset-0 z-[60] pointer-events-none">
             {/* Host Pawn */}
             <div 
-              className="absolute w-8 h-8 transition-all duration-300 ease-in-out" 
+              className="absolute w-8 h-8 transition-all duration-150 ease-out" 
               style={{ 
                 left: `${sameCell ? hostCoords.x - 2.5 : hostCoords.x}%`, 
                 top: `${hostCoords.y}%`, 
-                transform: 'translate(-50%, -85%)' 
+                transform: 'translate(-50%, -85%)',
+                transitionDuration: SNAKES[visualHostPos] || LADDERS[visualHostPos] ? '500ms' : '180ms'
               }}
             >
               <Pawn color="#4f46e5" />
             </div>
             {/* Guest Pawn */}
             <div 
-              className="absolute w-8 h-8 transition-all duration-300 ease-in-out" 
+              className="absolute w-8 h-8 transition-all duration-150 ease-out" 
               style={{ 
                 left: `${sameCell ? guestCoords.x + 2.5 : guestCoords.x}%`, 
                 top: `${guestCoords.y}%`, 
-                transform: 'translate(-50%, -85%)' 
+                transform: 'translate(-50%, -85%)',
+                transitionDuration: SNAKES[visualGuestPos] || LADDERS[visualGuestPos] ? '500ms' : '180ms'
               }}
             >
               <Pawn color="#10b981" />

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile, Gender } from '../types';
 import { dbService } from '../services/dbService';
-import { User, CheckCircle2, Copy, AlertTriangle, PartyPopper, Sparkles, LogIn, UserPlus, LogOut, Swords, TrendingUp, Trophy, Star } from 'lucide-react';
+import { User, CheckCircle2, Copy, AlertTriangle, PartyPopper, Sparkles, LogIn, UserPlus, LogOut, Swords, TrendingUp, Trophy, KeyRound, Eye, EyeOff } from 'lucide-react';
 
 interface ProfileTabProps {
   onProfileUpdate: (p: UserProfile | null) => void;
@@ -12,7 +12,8 @@ interface ProfileTabProps {
 const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile }) => {
   const [mode, setMode] = useState<'create' | 'login'>('login');
   const [name, setName] = useState(currentProfile?.name || '');
-  const [age, setAge] = useState(currentProfile?.age?.toString() || '');
+  const [pin, setPin] = useState(currentProfile?.pin || '');
+  const [showPin, setShowPin] = useState(false);
   const [gender, setGender] = useState<Gender>(currentProfile?.gender || 'male');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,14 +22,15 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
   useEffect(() => {
     if (currentProfile) {
       setName(currentProfile.name);
-      setAge(currentProfile.age.toString());
+      setPin(currentProfile.pin);
       setGender(currentProfile.gender as Gender);
     } else {
       setName('');
-      setAge('');
+      setPin('');
       setGender('male');
     }
-  }, [currentProfile]);
+    setShowPin(false);
+  }, [currentProfile, mode]);
 
   const handleAction = async () => {
     if (currentProfile) return; 
@@ -41,21 +43,26 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
       return;
     }
 
+    if (pin.length !== 4 || !/^\d+$/.test(pin)) {
+      setError('PIN must be exactly 4 digits');
+      return;
+    }
+
     setSaving(true);
     try {
       if (mode === 'login') {
         const player = await dbService.findPlayerGlobal(trimmedName);
-        if (player) {
+        if (player && String(player.pin) === String(pin)) {
           const db = { users: [player], friends: [], chats: [], games: [] };
           localStorage.setItem('snake_quest_db', JSON.stringify(db));
           onProfileUpdate(player);
           setShowSuccess(true);
         } else {
-          setError('No player found');
+          setError('Player not found');
         }
       } else {
-        if (!age || !gender) {
-          setError('Please fill all details');
+        if (!gender) {
+          setError('Please select an avatar type');
           setSaving(false);
           return;
         }
@@ -67,7 +74,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
 
         const profile: UserProfile = {
           name: trimmedName,
-          age: parseInt(age),
+          pin: pin,
           gender,
           uniqueId: trimmedName
         };
@@ -77,10 +84,11 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
         setShowSuccess(true);
       }
     } catch (e: any) {
-      if (e.message === 'USERNAME_TAKEN') {
+      console.error("Auth Error:", e);
+      if (e.message.includes('USERNAME_TAKEN')) {
         setError('This Username is already in use.');
       } else {
-        setError('Error: ' + e.message);
+        setError('Failed to process. Please try again.');
       }
     } finally {
       setSaving(false);
@@ -100,6 +108,11 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
     }
   };
 
+  const handlePinChange = (val: string) => {
+    const cleaned = val.replace(/\D/g, '').slice(0, 4);
+    setPin(cleaned);
+  };
+
   const isLoggedIn = !!currentProfile;
   const winCount = currentProfile?.wins || 0;
   const lossCount = currentProfile?.losses || 0;
@@ -109,7 +122,6 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-slate-950 overflow-x-hidden relative">
-      {/* FANCY GAMING WALLPAPER BACKGROUND */}
       <div 
         className="absolute inset-0 z-0 pointer-events-none opacity-30 mix-blend-screen"
         style={{
@@ -120,7 +132,6 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
         }}
       />
       
-      {/* NEON OVERLAYS */}
       <div className="absolute inset-0 z-0 pointer-events-none">
         <div className="absolute top-[-5%] left-[-5%] w-[60%] h-[60%] bg-indigo-600/20 blur-[130px] rounded-full animate-pulse" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/10 blur-[100px] rounded-full" />
@@ -151,7 +162,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
           <div className="flex flex-col items-center justify-center gap-2">
             <div className="flex items-center gap-3">
               <h1 className="text-4xl font-black tracking-tighter text-white uppercase italic drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)] break-all max-w-full">
-                {isLoggedIn ? currentProfile.name : (mode === 'login' ? 'Login' : 'Setup Profile')}
+                {isLoggedIn ? currentProfile.name : (mode === 'login' ? 'Login' : 'New Player')}
               </h1>
               {isLoggedIn && (
                 <button onClick={handleLogout} className="p-2 bg-rose-500/20 hover:bg-rose-500 text-rose-500 hover:text-white rounded-xl border border-rose-500/20 transition-all active:scale-90 backdrop-blur-sm" title="Logout">
@@ -166,27 +177,52 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
           {error && <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-xl flex items-center gap-3 text-rose-500 text-[10px] font-black uppercase tracking-wider animate-in shake duration-300"><AlertTriangle size={16} />{error}</div>}
 
           {!isLoggedIn && (
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 opacity-70">Player</label>
-              <input type="text" value={name} onChange={(e) => setName(e.target.value.replace(/\s/g, ''))} className="w-full px-5 py-4 rounded-2xl bg-slate-950/60 border border-slate-800 focus:border-indigo-500 outline-none transition-all text-white font-bold shadow-inner" placeholder="Username" />
-            </div>
-          )}
-
-          {mode === 'create' && !isLoggedIn && (
-            <>
+            <div className="space-y-4">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 opacity-70">Player Age</label>
-                <input type="number" value={age} onChange={(e) => setAge(e.target.value)} className="w-full px-5 py-4 rounded-2xl bg-slate-950/60 border border-slate-800 focus:border-indigo-500 outline-none transition-all text-white font-bold shadow-inner" placeholder="Age" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 opacity-70">Select Avatar Type</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(['male', 'female'] as Gender[]).map((g) => (
-                    <button key={g} onClick={() => setGender(g)} className={`py-4 rounded-2xl text-[11px] font-black transition-all border ${gender === g ? 'bg-indigo-600 text-white border-white/20 shadow-lg' : 'bg-slate-950/30 text-slate-400 border-white/5'}`}>{g.toUpperCase()}</button>
-                  ))}
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 opacity-70">Player Name</label>
+                <div className="relative">
+                  <User size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <input type="text" value={name} onChange={(e) => setName(e.target.value.replace(/\s/g, ''))} className="w-full pl-12 pr-5 py-4 rounded-2xl bg-slate-950/60 border border-slate-800 focus:border-indigo-500 outline-none transition-all text-white font-bold shadow-inner" placeholder="Username" />
                 </div>
               </div>
-            </>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 opacity-70">Secret 4-Digit PIN</label>
+                <div className="relative">
+                  <KeyRound size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <input 
+                    type={mode === 'create' ? 'text' : (showPin ? 'text' : 'password')}
+                    inputMode="numeric"
+                    maxLength={4}
+                    value={pin} 
+                    onChange={(e) => handlePinChange(e.target.value)} 
+                    className={`w-full pl-12 pr-12 py-4 rounded-2xl bg-slate-950/60 border border-slate-800 focus:border-indigo-500 outline-none transition-all text-white font-bold shadow-inner ${mode === 'login' && !showPin ? 'tracking-[0.5em]' : 'tracking-widest'}`} 
+                    placeholder="****" 
+                  />
+                  {mode === 'login' && (
+                    <button 
+                      type="button" 
+                      onClick={() => setShowPin(!showPin)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-indigo-400 transition-colors"
+                    >
+                      {showPin ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  )}
+                </div>
+                {mode === 'create' && <p className="text-[8px] font-black text-indigo-400 uppercase tracking-widest ml-1 opacity-60">Visible for confirmation during setup</p>}
+              </div>
+
+              {mode === 'create' && (
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 opacity-70">Select Avatar Type</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['male', 'female'] as Gender[]).map((g) => (
+                      <button key={g} onClick={() => setGender(g)} className={`py-4 rounded-2xl text-[11px] font-black transition-all border ${gender === g ? 'bg-indigo-600 text-white border-white/20 shadow-lg' : 'bg-slate-950/30 text-slate-400 border-white/5'}`}>{g.toUpperCase()}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {currentProfile && (
@@ -239,7 +275,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
               <button onClick={handleAction} disabled={saving} className="w-full bg-white text-black font-black py-5 rounded-2xl flex items-center justify-center gap-3 transition-all active:scale-95 shadow-[0_15px_40px_rgba(255,255,255,0.1)] uppercase tracking-[0.2em] text-[11px]">
                 {saving ? 'AUTHENTICATING...' : (mode === 'login' ? 'ENTER ARENA' : 'REGISTER PLAYER')}
               </button>
-              <button onClick={() => setMode(mode === 'create' ? 'login' : 'create')} className="w-full text-slate-400 font-black text-[9px] uppercase tracking-[0.25em] flex items-center justify-center gap-2 hover:text-indigo-400 transition-colors">
+              <button onClick={() => { setMode(mode === 'create' ? 'login' : 'create'); setPin(''); setError(null); }} className="w-full text-slate-400 font-black text-[9px] uppercase tracking-[0.25em] flex items-center justify-center gap-2 hover:text-indigo-400 transition-colors">
                 {mode === 'login' ? <><UserPlus size={14} /> new player? Sign up</> : <><LogIn size={14} /> Existing player? Log in</>}
               </button>
             </div>

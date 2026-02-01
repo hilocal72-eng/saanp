@@ -66,7 +66,8 @@ export const dbService = {
           id: data.records[0].id, 
           uniqueId: String(f.name),
           name: String(f.name),
-          age: Number(f.age),
+          // Explicitly cast pin to string to handle Number/Text fields gracefully
+          pin: f.pin !== undefined && f.pin !== null ? String(f.pin) : '',
           gender: f.gender,
           lastSeen: f.lastSeen,
           wins: Number(f.wins || 0),
@@ -111,12 +112,13 @@ export const dbService = {
 
     const fields = { 
       name: profile.name, 
-      age: profile.age, 
+      pin: String(profile.pin), // Ensure it's a string
       gender: profile.gender, 
       lastSeen: Date.now(),
       wins: 0,
       losses: 0
     };
+    
     const result = await airtableFetch(AIRTABLE_CONFIG.TABLES.USERS, {
       method: 'POST',
       body: JSON.stringify({ records: [{ fields }] })
@@ -148,8 +150,9 @@ export const dbService = {
         };
       });
 
-      // Now fetch profiles for all unique friends to get lastSeen
       const friendNames = friendItems.map(f => f.name);
+      if (friendNames.length === 0) return [];
+      
       const profileFormula = `OR(${friendNames.map(n => `{name}='${n.replace(/'/g, "\\'")}'`).join(',')})`;
       const profileData = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.USERS}?filterByFormula=${encodeURIComponent(profileFormula)}`);
       

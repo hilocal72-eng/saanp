@@ -73,22 +73,37 @@ const App: React.FC = () => {
     }
   };
 
-  // Fixed: Changed icon type to React.ReactElement<any> to satisfy cloneElement requirements
-  const renderProfileRequired = (title: string, subtitle: string, description: string, icon: React.ReactElement<any>) => (
+  const renderProfileRequired = (title: string, subtitle: string, description: string, icon: React.ReactElement<any>, tabType: Tab) => (
     <div className="relative flex flex-col items-center justify-center h-[100dvh] p-8 text-center animate-in fade-in zoom-in-95 bg-slate-950 overflow-hidden">
       {/* GAMING BACKGROUND ELEMENTS */}
       <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-        <div 
-          className="absolute inset-0 opacity-[0.25]"
-          style={{
-            backgroundImage: `linear-gradient(to right, #6366f1 1px, transparent 1px), linear-gradient(to bottom, #6366f1 1px, transparent 1px)`,
-            backgroundSize: '45px 45px',
-            maskImage: 'radial-gradient(ellipse at center, black, transparent 80%)',
-            transform: 'perspective(600px) rotateX(30deg) scale(2.5)',
-            transformOrigin: 'center top',
-            animation: 'grid-scroll 10s linear infinite'
-          }}
-        />
+        {tabType === Tab.FRIENDS ? (
+          // Use the abstract circular background for Social Center
+          <>
+            <div 
+              className="absolute inset-0 opacity-40 mix-blend-screen brightness-[0.7] saturate-[1.2]"
+              style={{
+                backgroundImage: `url('https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?auto=format&fit=crop&q=80&w=2070')`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }}
+            />
+            <div className="absolute top-[-5%] right-[-10%] w-[70%] h-[70%] bg-indigo-600/30 blur-[130px] rounded-full animate-pulse" />
+          </>
+        ) : (
+          // Default grid background
+          <div 
+            className="absolute inset-0 opacity-[0.25]"
+            style={{
+              backgroundImage: `linear-gradient(to right, #6366f1 1px, transparent 1px), linear-gradient(to bottom, #6366f1 1px, transparent 1px)`,
+              backgroundSize: '45px 45px',
+              maskImage: 'radial-gradient(ellipse at center, black, transparent 80%)',
+              transform: 'perspective(600px) rotateX(30deg) scale(2.5)',
+              transformOrigin: 'center top',
+              animation: 'grid-scroll 10s linear infinite'
+            }}
+          />
+        )}
         <div className="absolute top-[-10%] left-[-10%] w-[80%] h-[80%] bg-indigo-600/20 blur-[150px] rounded-full animate-pulse" />
         <div className="absolute bottom-[-15%] right-[-15%] w-[80%] h-[80%] bg-blue-600/20 blur-[150px] rounded-full animate-pulse" style={{ animationDelay: '2s' }} />
         <div className="absolute inset-0 opacity-[0.08] pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%)] bg-[length:100%_4px]" />
@@ -119,7 +134,6 @@ const App: React.FC = () => {
                <Trophy size={24} className="absolute bottom-4 right-4 text-white/5 rotate-12" />
                <Zap size={24} className="absolute top-1/2 right-2 text-white/5 -translate-y-1/2" />
                <div className="relative z-10 text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.4)]">
-                 {/* Fixed: Removed manual cast to fix TS overload mismatch error */}
                  {React.cloneElement(icon, { size: 72, strokeWidth: 2.5 })}
                </div>
                <div className="absolute inset-0 w-1/2 h-full bg-white/5 skew-x-[-20deg] animate-[shine_3s_infinite] pointer-events-none"></div>
@@ -161,14 +175,16 @@ const App: React.FC = () => {
           "Social Center", 
           "Elite Network",
           "Connect with legendary players and build your global squad.",
-          <Users />
+          <Users />,
+          Tab.FRIENDS
         );
       case Tab.GAME:
         return myProfile ? <GameTab myProfile={myProfile} game={activeGame} setGame={setActiveGame} /> : renderProfileRequired(
           "Wanna Play?", 
           "The Arena Awaits",
           "Unlock global matchmaking and start your quest to the top.",
-          <Gamepad2 />
+          <Gamepad2 />,
+          Tab.GAME
         );
       default:
         return null;

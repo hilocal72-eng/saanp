@@ -13,15 +13,9 @@ export const LADDERS: Record<number, number> = {
 
 export const SNAKES: Record<number, number> = {
   16: 6,
-  47: 26,
-  49: 11,
-  56: 53,
   62: 19,
-  64: 60,
   87: 24,
-  93: 73,
-  95: 75,
-  98: 78
+  95: 75
 };
 
 export const GRID_SIZE = 10;
