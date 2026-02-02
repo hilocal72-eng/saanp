@@ -4,7 +4,7 @@ import { GameState, UserProfile, ChatMessage } from '../types';
 import { dbService } from '../services/dbService';
 import { LADDERS, SNAKES, BOARD_CELLS } from '../constants';
 import { 
-  Trophy, Sword, Zap, Frown, Star, Clock, Sparkles, Send, MessageCircle
+  Trophy, Sword, Frown, Star, Clock, Sparkles, Send, MessageSquare
 } from 'lucide-react';
 
 interface GameTabProps {
@@ -15,7 +15,6 @@ interface GameTabProps {
 }
 
 const TURN_TIMEOUT_SECONDS = 60;
-const MESSAGE_LIFETIME_MS = 20000;
 
 const formatTime = (seconds: number) => {
   const mins = Math.floor(seconds / 60);
@@ -119,15 +118,6 @@ const IsometricDie = ({ value, rolling }: { value: number, rolling: boolean }) =
   </svg>
 );
 
-const ChatBubble = ({ text, color, isHost }: { text: string, color: string, isHost: boolean }) => (
-  <div className={`absolute bottom-full mb-3 px-3 py-2 rounded-2xl border shadow-2xl animate-in fade-in zoom-in slide-in-from-bottom-2 duration-300 min-w-[60px] max-w-[180px] z-[200]`}
-       style={{ backgroundColor: `${color}f2`, borderColor: 'rgba(255,255,255,0.5)', backdropFilter: 'blur(8px)' }}>
-    <p className="text-[11px] font-extrabold text-white leading-tight text-center break-words select-none">{text}</p>
-    <div className={`absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px]`} 
-         style={{ borderTopColor: `${color}f2` }} />
-  </div>
-);
-
 const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUpdate }) => {
   const [inputCode, setInputCode] = useState('');
   const [rolling, setRolling] = useState(false);
@@ -140,12 +130,11 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
   const [visualGuestPos, setVisualGuestPos] = useState(game?.guestPos || 1);
   const [isAnimating, setIsAnimating] = useState(false);
   const gameRef = useRef<GameState | null>(game);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
 
   // Chat States
   const [chatInput, setChatInput] = useState('');
-  const [hostMsg, setHostMsg] = useState<{ text: string, timestamp: number } | null>(null);
-  const [guestMsg, setGuestMsg] = useState<{ text: string, timestamp: number } | null>(null);
-  const [currentTime, setCurrentTime] = useState(Date.now());
+  const [sessionMessages, setSessionMessages] = useState<ChatMessage[]>([]);
   
   useEffect(() => { gameRef.current = game; }, [game]);
 
@@ -157,9 +146,10 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
   }, [game?.id]);
 
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [sessionMessages]);
 
   const isMyTurn = !!(game && myProfile && (
     (game.turn === 'host' && game.hostId === myProfile.uniqueId) ||
@@ -242,18 +232,12 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
             setGame(remoteGame); 
           }
 
-          // Polling for messages
+          // Polling for session messages
           if (game.guestId) {
              const opponentId = game.hostId === myProfile.uniqueId ? game.guestId : game.hostId;
-             const msgs = await dbService.getMessages(myProfile.uniqueId, opponentId);
-             if (msgs.length > 0) {
-               const latest = msgs[msgs.length - 1];
-               if (latest.senderId === game.hostId) {
-                 setHostMsg({ text: latest.text, timestamp: latest.timestamp });
-               } else {
-                 setGuestMsg({ text: latest.text, timestamp: latest.timestamp });
-               }
-             }
+             // Explicitly fetch messages with gameId filter
+             const msgs = await dbService.getMessages(myProfile.uniqueId, opponentId, game.id);
+             setSessionMessages(msgs);
           }
         } catch (e) { console.debug("Sync failed"); }
       }, 2000);
@@ -332,15 +316,12 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
       senderId: myProfile.uniqueId,
       receiverId: opponentId,
       text: chatInput.trim(),
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      gameId: game.id // Tag with gameId for isolation
     };
     await dbService.sendMessage(msg);
     setChatInput('');
-    if (myProfile.uniqueId === game.hostId) {
-      setHostMsg({ text: msg.text, timestamp: msg.timestamp });
-    } else {
-      setGuestMsg({ text: msg.text, timestamp: msg.timestamp });
-    }
+    setSessionMessages(prev => [...prev, msg]);
   };
 
   const getCellCoords = (cell: number) => {
@@ -400,9 +381,6 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
     );
   }
 
-  const showHostMsg = hostMsg && (currentTime - hostMsg.timestamp < MESSAGE_LIFETIME_MS);
-  const showGuestMsg = guestMsg && (currentTime - guestMsg.timestamp < MESSAGE_LIFETIME_MS);
-
   return (
     <div className="flex flex-col h-[100dvh] bg-slate-950 text-white overflow-hidden relative pb-32">
       {game.winner && iWon && <Confetti />}
@@ -423,17 +401,46 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
         <button onClick={() => setShowQuitModal(true)} className="px-3 py-1.5 bg-rose-500 text-white rounded-lg text-[9px] font-black border border-white/20 active:scale-90">QUIT</button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2 py-4 flex flex-col items-center">
-        {/* Adjusted mt-20 to ensure chat bubbles don't hit the Arena header */}
-        <div className="flex justify-center items-center gap-3 mb-4 mt-20 relative z-[110]">
+      <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col items-center">
+        {/* BIG RECTANGLE CHAT FEED AREA */}
+        <div className="w-full mb-6 mt-2 relative z-[110]">
+          <div className="flex items-center gap-2 mb-2 px-1">
+            <MessageSquare size={12} className="text-indigo-400" />
+            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-indigo-400">Battle Feed</span>
+          </div>
+          <div 
+            ref={chatScrollRef}
+            className="w-full h-24 bg-slate-900/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-y-auto p-3 flex flex-col gap-2 shadow-inner"
+          >
+            {sessionMessages.length === 0 ? (
+              <div className="h-full flex items-center justify-center">
+                <p className="text-[8px] font-black text-white/20 uppercase tracking-[0.3em]">No Transmission</p>
+              </div>
+            ) : (
+              sessionMessages.map((m, i) => (
+                <div key={i} className="flex flex-col gap-0.5 animate-in fade-in slide-in-from-left-2 duration-300">
+                  <div className="flex items-center gap-1.5">
+                    <div className={`w-1 h-3 rounded-full ${m.senderId === game.hostId ? 'bg-indigo-500' : 'bg-emerald-500'}`} />
+                    <span className={`text-[7px] font-black uppercase tracking-widest ${m.senderId === game.hostId ? 'text-indigo-300' : 'text-emerald-300'}`}>
+                      {m.senderId}
+                    </span>
+                  </div>
+                  <p className="text-[10px] font-bold text-white/90 pl-2.5 leading-tight break-words">
+                    {m.text}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="flex justify-center items-center gap-3 mb-6 relative z-[110]">
            <div className={`px-2 py-1.5 rounded-xl border flex flex-col items-center min-w-[85px] relative ${game.turn === 'host' ? 'bg-indigo-600 border-white scale-105' : 'bg-slate-800 border-white/10 opacity-80'}`}>
-              {showHostMsg && <ChatBubble text={hostMsg.text} color="#4f46e5" isHost={true} />}
               <span className="text-base font-black text-white leading-none">{game.hostLastDice || '-'}</span>
               <span className="text-[8px] font-black mt-0.5 uppercase tracking-widest truncate max-w-[75px]">{game.hostId}</span>
               {game.turn === 'host' && !game.winner && <div className="flex items-center gap-1 mt-1 text-white"><Clock size={8} /><span className="text-[7px] font-black">{formatTime(timeLeft)}</span></div>}
            </div>
            <div className={`px-2 py-1.5 rounded-xl border flex flex-col items-center min-w-[85px] relative ${game.turn === 'guest' ? 'bg-emerald-600 border-white scale-105' : 'bg-slate-800 border-white/10 opacity-80'}`}>
-              {showGuestMsg && <ChatBubble text={guestMsg.text} color="#10b981" isHost={false} />}
               <span className="text-base font-black text-white leading-none">{game.guestLastDice || '-'}</span>
               <span className="text-[8px] font-black mt-0.5 uppercase tracking-widest truncate max-w-[75px]">{game.guestId || ''}</span>
               {game.turn === 'guest' && !game.winner && game.guestId && <div className="flex items-center gap-1 mt-1 text-white"><Clock size={8} /><span className="text-[7px] font-black">{formatTime(timeLeft)}</span></div>}
@@ -516,7 +523,6 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2 pointer-events-auto w-full max-w-sm">
-            {/* Minimal Chat Input */}
             {game.guestId && (
               <div className="w-full px-4 mb-2">
                 <div className="bg-slate-900/40 backdrop-blur-xl rounded-2xl border border-white/10 flex items-center p-1 shadow-inner ring-1 ring-white/5">

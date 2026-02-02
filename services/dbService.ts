@@ -67,7 +67,6 @@ export const dbService = {
           id: data.records[0].id, 
           uniqueId: String(f.name),
           name: String(f.name),
-          // Explicitly cast pin to string to handle Number/Text fields gracefully
           pin: f.pin !== undefined && f.pin !== null ? String(f.pin) : '',
           gender: f.gender,
           lastSeen: f.lastSeen,
@@ -113,7 +112,7 @@ export const dbService = {
 
     const fields = { 
       name: profile.name, 
-      pin: String(profile.pin), // Ensure it's a string
+      pin: String(profile.pin),
       gender: profile.gender, 
       lastSeen: Date.now(),
       wins: 0,
@@ -222,8 +221,14 @@ export const dbService = {
     });
   },
 
-  getMessages: async (userA: string, userB: string): Promise<ChatMessage[]> => {
-    const filter = `OR(AND({senderId}='${userA}',{receiverId}='${userB}'), AND({senderId}='${userB}',{receiverId}='${userA}'))`;
+  getMessages: async (userA: string, userB: string, gameId?: string): Promise<ChatMessage[]> => {
+    // Session isolation logic
+    let filter = `OR(AND({senderId}='${userA}',{receiverId}='${userB}'), AND({senderId}='${userB}',{receiverId}='${userA}'))`;
+    if (gameId) {
+      filter = `AND(${filter}, {gameId}='${gameId}')`;
+    } else {
+      filter = `AND(${filter}, OR({gameId}='', NOT({gameId})))`;
+    }
     const data = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.MESSAGES}?filterByFormula=${encodeURIComponent(filter)}&sort[0][field]=timestamp&sort[0][direction]=asc`);
     return data.records.map((r: any) => ({ id: r.id, ...r.fields }));
   },
@@ -235,7 +240,8 @@ export const dbService = {
   },
 
   getNewMessageCount: async (myUsername: string, since: number) => {
-    const filter = `AND({receiverId}='${myUsername}', {timestamp} > ${since})`;
+    // Only count messages that ARE NOT game-specific (DMs only)
+    const filter = `AND({receiverId}='${myUsername}', {timestamp} > ${since}, OR({gameId}='', NOT({gameId})))`;
     const data = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.MESSAGES}?filterByFormula=${encodeURIComponent(filter)}`);
     return data.records.length;
   },

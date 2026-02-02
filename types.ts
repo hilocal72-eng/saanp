@@ -28,6 +28,7 @@ export interface ChatMessage {
   receiverId: string;
   text: string;
   timestamp: number;
+  gameId?: string; // New field for session isolation
 }
 
 export interface GameState {

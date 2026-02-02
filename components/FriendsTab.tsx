@@ -19,7 +19,6 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
   const [friendToDelete, setFriendToDelete] = useState<Friend | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error', message: string } | null>(null);
   
-  // States for Friend Stats Modal
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [fetchingStats, setFetchingStats] = useState(false);
   const [viewingFriendStats, setViewingFriendStats] = useState<UserProfile | null>(null);
@@ -80,6 +79,7 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
     try {
       const list = await dbService.getFriends(myProfile.name);
       const friendsWithMeta = await Promise.all(list.map(async (f) => {
+        // Exclude game messages explicitly
         const msgs = await dbService.getMessages(myProfile.name, f.uniqueId);
         const lastMsg = msgs[msgs.length - 1];
         const lastRead = lastReadTimes[f.uniqueId] || 0;
@@ -147,6 +147,7 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
         receiverId: activeChat.uniqueId,
         text: newMsg.trim(),
         timestamp: Date.now()
+        // No gameId here makes it a global DM
       };
       await dbService.sendMessage(msg);
       setNewMsg('');
@@ -187,7 +188,6 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
           />
         </div>
 
-        {/* Friend Stats Modal Overlay */}
         {showStatsModal && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-xl animate-in fade-in duration-300">
             <div className="bg-slate-900 border border-indigo-500/30 p-8 rounded-[2.5rem] shadow-[0_0_80px_rgba(79,70,229,0.2)] text-center max-w-xs w-full relative overflow-hidden">
