@@ -79,7 +79,6 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
     try {
       const list = await dbService.getFriends(myProfile.name);
       const friendsWithMeta = await Promise.all(list.map(async (f) => {
-        // Exclude game messages explicitly
         const msgs = await dbService.getMessages(myProfile.name, f.uniqueId);
         const lastMsg = msgs[msgs.length - 1];
         const lastRead = lastReadTimes[f.uniqueId] || 0;
@@ -147,7 +146,6 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
         receiverId: activeChat.uniqueId,
         text: newMsg.trim(),
         timestamp: Date.now()
-        // No gameId here makes it a global DM
       };
       await dbService.sendMessage(msg);
       setNewMsg('');

@@ -221,14 +221,8 @@ export const dbService = {
     });
   },
 
-  getMessages: async (userA: string, userB: string, gameId?: string): Promise<ChatMessage[]> => {
-    // Session isolation logic
-    let filter = `OR(AND({senderId}='${userA}',{receiverId}='${userB}'), AND({senderId}='${userB}',{receiverId}='${userA}'))`;
-    if (gameId) {
-      filter = `AND(${filter}, {gameId}='${gameId}')`;
-    } else {
-      filter = `AND(${filter}, OR({gameId}='', NOT({gameId})))`;
-    }
+  getMessages: async (userA: string, userB: string): Promise<ChatMessage[]> => {
+    const filter = `OR(AND({senderId}='${userA}',{receiverId}='${userB}'), AND({senderId}='${userB}',{receiverId}='${userA}'))`;
     const data = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.MESSAGES}?filterByFormula=${encodeURIComponent(filter)}&sort[0][field]=timestamp&sort[0][direction]=asc`);
     return data.records.map((r: any) => ({ id: r.id, ...r.fields }));
   },
@@ -240,8 +234,7 @@ export const dbService = {
   },
 
   getNewMessageCount: async (myUsername: string, since: number) => {
-    // Only count messages that ARE NOT game-specific (DMs only)
-    const filter = `AND({receiverId}='${myUsername}', {timestamp} > ${since}, OR({gameId}='', NOT({gameId})))`;
+    const filter = `AND({receiverId}='${myUsername}', {timestamp} > ${since})`;
     const data = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.MESSAGES}?filterByFormula=${encodeURIComponent(filter)}`);
     return data.records.length;
   },
