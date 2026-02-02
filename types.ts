@@ -39,9 +39,11 @@ export interface GameState {
   guestPos: number;
   turn: 'host' | 'guest';
   winner?: string;
-  lastDice: number; // For backward compatibility
+  lastDice: number;
   hostLastDice?: number;
   guestLastDice?: number;
+  hostReaction?: string; // e.g., "🤣|timestamp"
+  guestReaction?: string; // e.g., "🐍|timestamp"
   lastUpdated?: number;
 }
 

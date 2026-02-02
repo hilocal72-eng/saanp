@@ -51,6 +51,8 @@ const parseGame = (record: any): GameState => {
     lastDice: Number(f.lastDice) || 0,
     hostLastDice: Number(f.hostLastDice) || 0,
     guestLastDice: Number(f.guestLastDice) || 0,
+    hostReaction: f.hostReaction ? String(f.hostReaction) : undefined,
+    guestReaction: f.guestReaction ? String(f.guestReaction) : undefined,
     lastUpdated: f.lastUpdated ? Number(f.lastUpdated) : undefined
   };
 };
@@ -235,7 +237,7 @@ export const dbService = {
 
   getNewMessageCount: async (myUsername: string, since: number) => {
     const filter = `AND({receiverId}='${myUsername}', {timestamp} > ${since})`;
-    const data = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.MESSAGES}?filterByFormula=${encodeURIComponent(filter)}`);
+    const data = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.MESSAGES}?filterByFormula=.${encodeURIComponent(filter)}`);
     return data.records.length;
   },
 

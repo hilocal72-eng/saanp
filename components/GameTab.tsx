@@ -4,7 +4,7 @@ import { GameState, UserProfile } from '../types';
 import { dbService } from '../services/dbService';
 import { LADDERS, SNAKES, BOARD_CELLS } from '../constants';
 import { 
-  Trophy, Sword, Frown, Star, Clock, Sparkles
+  Trophy, Sword, Frown, Star, Clock, Sparkles, Smile
 } from 'lucide-react';
 
 interface GameTabProps {
@@ -15,6 +15,15 @@ interface GameTabProps {
 }
 
 const TURN_TIMEOUT_SECONDS = 60;
+const ECHO_DURATION = 4000;
+const REACTIONS = [
+  { icon: '🤣', label: 'Laugh' },
+  { icon: '🐍', label: 'Snake!' },
+  { icon: '🍀', label: 'Lucky' },
+  { icon: '🔥', label: 'Hot' },
+  { icon: 'gg', label: 'GG' },
+  { icon: '?', label: 'Wait' }
+];
 
 const formatTime = (seconds: number) => {
   const mins = Math.floor(seconds / 60);
@@ -38,6 +47,28 @@ const Confetti = () => (
     ))}
   </div>
 );
+
+const ReactionBubble = ({ text, color, visible }: { text: string, color: string, visible: boolean }) => {
+  if (!visible) return null;
+  return (
+    <div 
+      className={`absolute -top-12 left-1/2 -translate-x-1/2 z-[100] animate-in zoom-in-50 fade-in duration-300 pointer-events-none`}
+    >
+      <div 
+        className={`px-3 py-1.5 rounded-2xl text-xs font-black shadow-xl border-2 flex items-center justify-center whitespace-nowrap backdrop-blur-md animate-bounce`}
+        style={{ 
+          backgroundColor: `${color}cc`, 
+          borderColor: 'white', 
+          color: 'white',
+          boxShadow: `0 10px 20px ${color}44`
+        }}
+      >
+        {text}
+        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 rotate-45 border-r-2 border-b-2" style={{ backgroundColor: color, borderColor: 'white' }}></div>
+      </div>
+    </div>
+  );
+};
 
 const CelebratingPlayer = () => (
   <div className="relative w-48 h-56 mx-auto mb-4 scale-110">
@@ -129,6 +160,8 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
   const [visualHostPos, setVisualHostPos] = useState(game?.hostPos || 1);
   const [visualGuestPos, setVisualGuestPos] = useState(game?.guestPos || 1);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [hostEcho, setHostEcho] = useState<{ text: string, time: number } | null>(null);
+  const [guestEcho, setGuestEcho] = useState<{ text: string, time: number } | null>(null);
   const gameRef = useRef<GameState | null>(game);
 
   useEffect(() => { gameRef.current = game; }, [game]);
@@ -137,8 +170,20 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
     if (game) {
       setVisualHostPos(game.hostPos);
       setVisualGuestPos(game.guestPos);
+      
+      // Update echoes from synced state
+      if (game.hostReaction) {
+        const [text, timeStr] = game.hostReaction.split('|');
+        const time = parseInt(timeStr);
+        if (Date.now() - time < ECHO_DURATION) setHostEcho({ text, time });
+      }
+      if (game.guestReaction) {
+        const [text, timeStr] = game.guestReaction.split('|');
+        const time = parseInt(timeStr);
+        if (Date.now() - time < ECHO_DURATION) setGuestEcho({ text, time });
+      }
     }
-  }, [game?.id]);
+  }, [game?.id, game?.hostReaction, game?.guestReaction]);
 
   const isMyTurn = !!(game && myProfile && (
     (game.turn === 'host' && game.hostId === myProfile.uniqueId) ||
@@ -217,7 +262,7 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
             setGame(remoteGame);
             return;
           }
-          if (remoteGame.hostPos !== current.hostPos || remoteGame.guestPos !== current.guestPos || remoteGame.turn !== current.turn || remoteGame.guestId !== current.guestId || remoteGame.winner !== current.winner || remoteGame.lastUpdated !== current.lastUpdated) {
+          if (remoteGame.hostPos !== current.hostPos || remoteGame.guestPos !== current.guestPos || remoteGame.turn !== current.turn || remoteGame.guestId !== current.guestId || remoteGame.winner !== current.winner || remoteGame.lastUpdated !== current.lastUpdated || remoteGame.hostReaction !== current.hostReaction || remoteGame.guestReaction !== current.guestReaction) {
             setGame(remoteGame); 
           }
         } catch (e) { console.debug("Sync failed"); }
@@ -225,6 +270,19 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
     }
     return () => { isActive = false; clearInterval(interval); };
   }, [game?.id, game?.winner, game?.code, myProfile?.uniqueId, statsUpdatedForGame, syncMyStatsLocally, setGame]);
+
+  const sendEcho = async (icon: string) => {
+    if (!game || !myProfile || !game.guestId) return;
+    const isHost = game.hostId === myProfile.uniqueId;
+    const reactionString = `${icon}|${Date.now()}`;
+    const update = { 
+      ...game, 
+      [isHost ? 'hostReaction' : 'guestReaction']: reactionString,
+      lastUpdated: Date.now() 
+    };
+    await dbService.updateGame(update);
+    setGame(update);
+  };
 
   const createGame = async () => {
     if (!myProfile) return;
@@ -429,8 +487,14 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
             })}
           </svg>
           <div className="absolute inset-0 z-[60] pointer-events-none">
-            <div className="absolute w-8 h-8 transition-all duration-150 ease-out" style={{ left: `${sameCell ? hostCoords.x - 2.5 : hostCoords.x}%`, top: `${hostCoords.y}%`, transform: 'translate(-50%, -85%)' }}><Pawn color="#4f46e5" /></div>
-            <div className="absolute w-8 h-8 transition-all duration-150 ease-out" style={{ left: `${sameCell ? guestCoords.x + 2.5 : guestCoords.x}%`, top: `${guestCoords.y}%`, transform: 'translate(-50%, -85%)' }}><Pawn color="#10b981" /></div>
+            <div className="absolute w-8 h-8 transition-all duration-150 ease-out" style={{ left: `${sameCell ? hostCoords.x - 2.5 : hostCoords.x}%`, top: `${hostCoords.y}%`, transform: 'translate(-50%, -85%)' }}>
+              <ReactionBubble text={hostEcho?.text || ''} color="#4f46e5" visible={!!hostEcho && (Date.now() - hostEcho.time < ECHO_DURATION)} />
+              <Pawn color="#4f46e5" />
+            </div>
+            <div className="absolute w-8 h-8 transition-all duration-150 ease-out" style={{ left: `${sameCell ? guestCoords.x + 2.5 : guestCoords.x}%`, top: `${guestCoords.y}%`, transform: 'translate(-50%, -85%)' }}>
+              <ReactionBubble text={guestEcho?.text || ''} color="#10b981" visible={!!guestEcho && (Date.now() - guestEcho.time < ECHO_DURATION)} />
+              <Pawn color="#10b981" />
+            </div>
           </div>
         </div>
       </div>
@@ -455,13 +519,30 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
             <button onClick={confirmLeave} className="w-full mt-8 py-4 bg-white text-black rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 shadow-xl transition-all">BACK TO LOBBY</button>
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-0.5 pointer-events-auto">
-            <button disabled={!isMyTurn || rolling || isAnimating || !game.guestId} onClick={rollDice} className={`w-16 h-16 rounded-[1.25rem] transition-all active:scale-90 relative ${!isMyTurn || rolling || isAnimating || !game.guestId ? 'opacity-40 grayscale pointer-events-none' : 'hover:scale-110'}`}>
-              <IsometricDie value={rolling ? rollingDiceValue : (game.lastDice || 1)} rolling={rolling} />
-              {isMyTurn && game.guestId && !rolling && !isAnimating && <div className="absolute -top-1 -right-1 w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center border-2 border-white animate-pulse"><Sparkles size={10} className="text-white" /></div>}
-            </button>
-            <div className="text-center min-h-[12px] mt-1">
-              {game.guestId && <p className={`text-[8px] font-black uppercase tracking-[0.2em] ${isMyTurn ? 'text-white' : 'text-slate-500'}`}>{isMyTurn ? "Roll Dice!" : "Opponent's Turn"}</p>}
+          <div className="flex flex-col items-center gap-4 pointer-events-auto w-full max-w-sm">
+            {game.guestId && (
+              <div className="flex justify-center gap-2 p-1 bg-slate-900/40 backdrop-blur-xl border border-white/10 rounded-2xl ring-1 ring-white/5 shadow-2xl">
+                {REACTIONS.map(r => (
+                  <button 
+                    key={r.label}
+                    onClick={() => sendEcho(r.icon)}
+                    className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-800 border border-white/5 hover:bg-white/10 active:scale-90 transition-all text-sm grayscale hover:grayscale-0"
+                    title={r.label}
+                  >
+                    {r.icon}
+                  </button>
+                ))}
+              </div>
+            )}
+            
+            <div className="flex flex-col items-center gap-0.5">
+              <button disabled={!isMyTurn || rolling || isAnimating || !game.guestId} onClick={rollDice} className={`w-16 h-16 rounded-[1.25rem] transition-all active:scale-90 relative ${!isMyTurn || rolling || isAnimating || !game.guestId ? 'opacity-40 grayscale pointer-events-none' : 'hover:scale-110'}`}>
+                <IsometricDie value={rolling ? rollingDiceValue : (game.lastDice || 1)} rolling={rolling} />
+                {isMyTurn && game.guestId && !rolling && !isAnimating && <div className="absolute -top-1 -right-1 w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center border-2 border-white animate-pulse"><Sparkles size={10} className="text-white" /></div>}
+              </button>
+              <div className="text-center min-h-[12px] mt-1">
+                {game.guestId && <p className={`text-[8px] font-black uppercase tracking-[0.2em] ${isMyTurn ? 'text-white' : 'text-slate-500'}`}>{isMyTurn ? "Roll Dice!" : "Opponent's Turn"}</p>}
+              </div>
             </div>
           </div>
         )}
