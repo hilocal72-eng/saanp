@@ -50,7 +50,8 @@ const parseGame = (record: any): GameState => {
     winner: f.winner ? String(f.winner) : undefined,
     lastDice: Number(f.lastDice) || 0,
     hostLastDice: Number(f.hostLastDice) || 0,
-    guestLastDice: Number(f.guestLastDice) || 0
+    guestLastDice: Number(f.guestLastDice) || 0,
+    lastUpdated: f.lastUpdated ? Number(f.lastUpdated) : undefined
   };
 };
 

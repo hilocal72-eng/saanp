@@ -42,6 +42,7 @@ export interface GameState {
   lastDice: number; // For backward compatibility
   hostLastDice?: number;
   guestLastDice?: number;
+  lastUpdated?: number;
 }
 
 export enum Tab {
