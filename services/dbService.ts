@@ -236,8 +236,8 @@ export const dbService = {
   },
 
   getNewMessageCount: async (myUsername: string, since: number) => {
-    const filter = `AND({receiverId}='${myUsername}', {timestamp} > ${since})`;
-    const data = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.MESSAGES}?filterByFormula=.${encodeURIComponent(filter)}`);
+    const filter = `AND({receiverId}='${myUsername.replace(/'/g, "\\'")}', {timestamp} > ${since})`;
+    const data = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.MESSAGES}?filterByFormula=${encodeURIComponent(filter)}`);
     return data.records.length;
   },
 

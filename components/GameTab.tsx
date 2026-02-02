@@ -4,7 +4,7 @@ import { GameState, UserProfile } from '../types';
 import { dbService } from '../services/dbService';
 import { LADDERS, SNAKES, BOARD_CELLS } from '../constants';
 import { 
-  Trophy, Sword, Frown, Star, Clock, Sparkles, Smile
+  Trophy, Sword, Frown, Star, Clock, Sparkles, Smile, Flame
 } from 'lucide-react';
 
 interface GameTabProps {
@@ -16,13 +16,14 @@ interface GameTabProps {
 
 const TURN_TIMEOUT_SECONDS = 60;
 const ECHO_DURATION = 4000;
+
 const REACTIONS = [
-  { icon: '🤣', label: 'Laugh' },
-  { icon: '🐍', label: 'Snake!' },
-  { icon: '🍀', label: 'Lucky' },
-  { icon: '🔥', label: 'Hot' },
-  { icon: 'gg', label: 'GG' },
-  { icon: '?', label: 'Wait' }
+  { icon: '😂', label: 'LOL', color: '#fbbf24' },
+  { icon: '😭', label: 'NOOO', color: '#60a5fa' },
+  { icon: '🤬', label: 'RAGE', color: '#f87171' },
+  { icon: '🐍', label: 'BIG SNAKE!', color: '#4ade80' },
+  { icon: '😎', label: 'COOL', color: '#0ea5e9' },
+  { icon: '🫡', label: 'GG', color: '#94a3b8' }
 ];
 
 const formatTime = (seconds: number) => {
@@ -48,23 +49,13 @@ const Confetti = () => (
   </div>
 );
 
-const ReactionBubble = ({ text, color, visible }: { text: string, color: string, visible: boolean }) => {
-  if (!visible) return null;
+const ReactionBubble: React.FC<{ text: string, playerColor: string, visible: boolean }> = ({ text, visible }) => {
+  if (!visible || !text) return null;
+
   return (
-    <div 
-      className={`absolute -top-12 left-1/2 -translate-x-1/2 z-[100] animate-in zoom-in-50 fade-in duration-300 pointer-events-none`}
-    >
-      <div 
-        className={`px-3 py-1.5 rounded-2xl text-xs font-black shadow-xl border-2 flex items-center justify-center whitespace-nowrap backdrop-blur-md animate-bounce`}
-        style={{ 
-          backgroundColor: `${color}cc`, 
-          borderColor: 'white', 
-          color: 'white',
-          boxShadow: `0 10px 20px ${color}44`
-        }}
-      >
+    <div className="absolute inset-0 flex items-center justify-center z-[500] pointer-events-none overflow-visible">
+      <div className="text-3xl animate-reaction-pop drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]">
         {text}
-        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 rotate-45 border-r-2 border-b-2" style={{ backgroundColor: color, borderColor: 'white' }}></div>
       </div>
     </div>
   );
@@ -166,24 +157,48 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
 
   useEffect(() => { gameRef.current = game; }, [game]);
 
+  // Sync echoes from remote state
   useEffect(() => {
     if (game) {
       setVisualHostPos(game.hostPos);
       setVisualGuestPos(game.guestPos);
       
-      // Update echoes from synced state
       if (game.hostReaction) {
         const [text, timeStr] = game.hostReaction.split('|');
         const time = parseInt(timeStr);
-        if (Date.now() - time < ECHO_DURATION) setHostEcho({ text, time });
+        if (Date.now() - time < ECHO_DURATION) {
+          setHostEcho({ text, time });
+        }
       }
       if (game.guestReaction) {
         const [text, timeStr] = game.guestReaction.split('|');
         const time = parseInt(timeStr);
-        if (Date.now() - time < ECHO_DURATION) setGuestEcho({ text, time });
+        if (Date.now() - time < ECHO_DURATION) {
+          setGuestEcho({ text, time });
+        }
       }
     }
   }, [game?.id, game?.hostReaction, game?.guestReaction]);
+
+  // Local cleanup timers for echoes
+  useEffect(() => {
+    let hostTimer: any;
+    let guestTimer: any;
+    
+    if (hostEcho) {
+      const remaining = ECHO_DURATION - (Date.now() - hostEcho.time);
+      hostTimer = setTimeout(() => setHostEcho(null), Math.max(0, remaining));
+    }
+    if (guestEcho) {
+      const remaining = ECHO_DURATION - (Date.now() - guestEcho.time);
+      guestTimer = setTimeout(() => setGuestEcho(null), Math.max(0, remaining));
+    }
+    
+    return () => {
+      clearTimeout(hostTimer);
+      clearTimeout(guestTimer);
+    };
+  }, [hostEcho?.time, guestEcho?.time]);
 
   const isMyTurn = !!(game && myProfile && (
     (game.turn === 'host' && game.hostId === myProfile.uniqueId) ||
@@ -274,7 +289,13 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
   const sendEcho = async (icon: string) => {
     if (!game || !myProfile || !game.guestId) return;
     const isHost = game.hostId === myProfile.uniqueId;
-    const reactionString = `${icon}|${Date.now()}`;
+    const timestamp = Date.now();
+    const reactionString = `${icon}|${timestamp}`;
+    
+    // Update locally immediately for better feel
+    if (isHost) setHostEcho({ text: icon, time: timestamp });
+    else setGuestEcho({ text: icon, time: timestamp });
+
     const update = { 
       ...game, 
       [isHost ? 'hostReaction' : 'guestReaction']: reactionString,
@@ -419,27 +440,31 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
         </div>
       )}
 
-      <div className="px-6 py-4 flex items-center justify-between border-b border-white/10 bg-slate-900/50 backdrop-blur-md z-[100]">
+      {/* Arena Header */}
+      <div className="px-6 py-4 flex items-center justify-between border-b border-white/10 bg-slate-900/50 backdrop-blur-md z-[50]">
         <div className="flex items-center gap-2"><Sword size={12} className="text-amber-400" /><span className="text-[10px] font-black uppercase tracking-[0.2em] text-white">Arena #{game.code}</span></div>
         <button onClick={() => setShowQuitModal(true)} className="px-3 py-1.5 bg-rose-500 text-white rounded-lg text-[9px] font-black border border-white/20 active:scale-90">QUIT</button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col items-center">
-        <div className="flex justify-center items-center gap-3 mb-6 mt-6 relative z-[110]">
-           <div className={`px-2 py-1.5 rounded-xl border flex flex-col items-center min-w-[85px] relative ${game.turn === 'host' ? 'bg-indigo-600 border-white scale-105' : 'bg-slate-800 border-white/10 opacity-80'}`}>
+        {/* Status Area - Emojis pop INSIDE these cards */}
+        <div className="flex justify-center items-center gap-3 mb-6 mt-6 sticky top-0 z-[400] w-full">
+           <div className={`px-2 py-1.5 rounded-xl border flex flex-col items-center min-w-[85px] relative transition-all duration-300 ${game.turn === 'host' ? 'bg-indigo-600 border-white scale-105 shadow-[0_0_20px_rgba(79,70,229,0.4)]' : 'bg-slate-800 border-white/10 opacity-80'}`}>
+              <ReactionBubble key={hostEcho?.time} text={hostEcho?.text || ''} playerColor="#4f46e5" visible={!!hostEcho} />
               <span className="text-base font-black text-white leading-none">{game.hostLastDice || '-'}</span>
               <span className="text-[8px] font-black mt-0.5 uppercase tracking-widest truncate max-w-[75px]">{game.hostId}</span>
               {game.turn === 'host' && !game.winner && <div className="flex items-center gap-1 mt-1 text-white"><Clock size={8} /><span className="text-[7px] font-black">{formatTime(timeLeft)}</span></div>}
            </div>
-           <div className={`px-2 py-1.5 rounded-xl border flex flex-col items-center min-w-[85px] relative ${game.turn === 'guest' ? 'bg-emerald-600 border-white scale-105' : 'bg-slate-800 border-white/10 opacity-80'}`}>
+           <div className={`px-2 py-1.5 rounded-xl border flex flex-col items-center min-w-[85px] relative transition-all duration-300 ${game.turn === 'guest' ? 'bg-emerald-600 border-white scale-105 shadow-[0_0_20px_rgba(16,185,129,0.4)]' : 'bg-slate-800 border-white/10 opacity-80'}`}>
+              <ReactionBubble key={guestEcho?.time} text={guestEcho?.text || ''} playerColor="#10b981" visible={!!guestEcho} />
               <span className="text-base font-black text-white leading-none">{game.guestLastDice || '-'}</span>
               <span className="text-[8px] font-black mt-0.5 uppercase tracking-widest truncate max-w-[75px]">{game.guestId || ''}</span>
               {game.turn === 'guest' && !game.winner && game.guestId && <div className="flex items-center gap-1 mt-1 text-white"><Clock size={8} /><span className="text-[7px] font-black">{formatTime(timeLeft)}</span></div>}
            </div>
         </div>
 
-        <div className="w-full max-w-full mx-auto bg-white rounded-xl border-[4px] border-slate-900 shadow-2xl relative aspect-square overflow-hidden mb-6">
-          <div className="absolute inset-0 flex flex-wrap z-10">{renderBoard()}</div>
+        <div className="w-full max-w-full mx-auto bg-white rounded-xl border-[4px] border-slate-900 shadow-2xl relative aspect-square mb-6 z-[60]">
+          <div className="absolute inset-0 flex flex-wrap z-10 overflow-hidden rounded-lg">{renderBoard()}</div>
           <svg className="absolute inset-0 pointer-events-none z-[40] w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
             <defs>
               <filter id="glow">
@@ -488,11 +513,9 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
           </svg>
           <div className="absolute inset-0 z-[60] pointer-events-none">
             <div className="absolute w-8 h-8 transition-all duration-150 ease-out" style={{ left: `${sameCell ? hostCoords.x - 2.5 : hostCoords.x}%`, top: `${hostCoords.y}%`, transform: 'translate(-50%, -85%)' }}>
-              <ReactionBubble text={hostEcho?.text || ''} color="#4f46e5" visible={!!hostEcho && (Date.now() - hostEcho.time < ECHO_DURATION)} />
               <Pawn color="#4f46e5" />
             </div>
             <div className="absolute w-8 h-8 transition-all duration-150 ease-out" style={{ left: `${sameCell ? guestCoords.x + 2.5 : guestCoords.x}%`, top: `${guestCoords.y}%`, transform: 'translate(-50%, -85%)' }}>
-              <ReactionBubble text={guestEcho?.text || ''} color="#10b981" visible={!!guestEcho && (Date.now() - guestEcho.time < ECHO_DURATION)} />
               <Pawn color="#10b981" />
             </div>
           </div>
@@ -521,15 +544,16 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
         ) : (
           <div className="flex flex-col items-center gap-4 pointer-events-auto w-full max-w-sm">
             {game.guestId && (
-              <div className="flex justify-center gap-2 p-1 bg-slate-900/40 backdrop-blur-xl border border-white/10 rounded-2xl ring-1 ring-white/5 shadow-2xl">
+              <div className="flex justify-center gap-2 p-1.5 bg-slate-900/60 backdrop-blur-2xl border border-white/20 rounded-[2rem] ring-1 ring-white/5 shadow-2xl">
                 {REACTIONS.map(r => (
                   <button 
                     key={r.label}
                     onClick={() => sendEcho(r.icon)}
-                    className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-800 border border-white/5 hover:bg-white/10 active:scale-90 transition-all text-sm grayscale hover:grayscale-0"
+                    className="w-10 h-10 flex flex-col items-center justify-center rounded-2xl bg-slate-800 border border-white/5 hover:bg-white/20 active:scale-90 transition-all group overflow-hidden"
                     title={r.label}
                   >
-                    {r.icon}
+                    <span className="text-lg grayscale group-hover:grayscale-0 transition-all">{r.icon}</span>
+                    <span className="text-[5px] font-black text-white/40 uppercase tracking-tighter mt-0.5 group-hover:text-white transition-colors">{r.label}</span>
                   </button>
                 ))}
               </div>
