@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { GameState, UserProfile } from '../types';
+import { GameState, UserProfile, ChatMessage } from '../types';
 import { dbService } from '../services/dbService';
 import { LADDERS, SNAKES, BOARD_CELLS } from '../constants';
 import { 
-  Trophy, Sword, Zap, Frown, Star, Clock, Sparkles
+  Trophy, Sword, Zap, Frown, Star, Clock, Sparkles, Send, MessageCircle
 } from 'lucide-react';
 
 interface GameTabProps {
@@ -15,6 +15,7 @@ interface GameTabProps {
 }
 
 const TURN_TIMEOUT_SECONDS = 60;
+const MESSAGE_LIFETIME_MS = 20000;
 
 const formatTime = (seconds: number) => {
   const mins = Math.floor(seconds / 60);
@@ -44,60 +45,38 @@ const CelebratingPlayer = () => (
     <div className="absolute inset-0 bg-indigo-500/10 blur-[60px] rounded-full animate-pulse"></div>
     <svg viewBox="0 0 200 240" className="w-full h-full drop-shadow-[0_15px_25px_rgba(0,0,0,0.5)] relative z-10 animate-victory-bounce">
       <defs>
-        <linearGradient id="skinGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <linearGradient id="skinGrad" x1="0%" x2="100%" y1="0%" y2="100%">
           <stop offset="0%" style={{ stopColor: '#ffdbac', stopOpacity: 1 }} />
           <stop offset="100%" style={{ stopColor: '#f1c27d', stopOpacity: 1 }} />
         </linearGradient>
-        <linearGradient id="trophyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+        <linearGradient id="trophyGrad" x1="0%" x2="0%" y1="0%" y2="100%">
           <stop offset="0%" style={{ stopColor: '#fde047', stopOpacity: 1 }} />
           <stop offset="100%" style={{ stopColor: '#a16207', stopOpacity: 1 }} />
         </linearGradient>
       </defs>
-      
-      {/* Background Sparkles */}
       <g className="animate-pulse">
         <path d="M40 40 L45 45 M45 40 L40 45" stroke="#fbbf24" strokeWidth="2" />
         <path d="M160 80 L165 85 M165 80 L160 85" stroke="#fbbf24" strokeWidth="2" />
         <path d="M30 150 L35 155 M35 150 L30 155" stroke="#fbbf24" strokeWidth="2" />
       </g>
-
-      {/* Legs */}
       <path d="M85 160 L75 220" stroke="url(#skinGrad)" strokeWidth="12" strokeLinecap="round" />
       <path d="M115 160 L125 220" stroke="url(#skinGrad)" strokeWidth="12" strokeLinecap="round" />
-      
-      {/* Shoes (Green) */}
       <rect x="65" y="220" width="20" height="10" rx="4" fill="#10b981" />
       <rect x="115" y="220" width="20" height="10" rx="4" fill="#10b981" />
-
-      {/* Shorts (Green) */}
       <path d="M75 130 L125 130 L130 165 L100 165 L100 155 L70 165 Z" fill="#10b981" />
       <path d="M80 130 L80 165" stroke="#059669" strokeWidth="3" />
       <path d="M120 130 L120 165" stroke="#059669" strokeWidth="3" />
-
-      {/* Torso (Orange Shirt) */}
       <path d="M75 80 L125 80 L130 140 L70 140 Z" fill="#f97316" />
-      
-      {/* Medal */}
       <path d="M90 80 L100 105 L110 80" stroke="#1e293b" strokeWidth="2" fill="none" />
       <circle cx="100" cy="110" r="8" fill="#fbbf24" stroke="#a16207" strokeWidth="1" />
-
-      {/* Head */}
       <path d="M85 45 Q100 35 115 45 L115 70 Q100 85 85 70 Z" fill="url(#skinGrad)" />
-      {/* Hair (Blue/Dark) */}
       <path d="M85 45 Q100 25 120 45 Q125 35 115 30 Q100 20 80 40 Z" fill="#1e293b" />
-      {/* Face features */}
       <circle cx="93" cy="55" r="1.5" fill="#1e293b" />
       <circle cx="107" cy="55" r="1.5" fill="#1e293b" />
       <path d="M93 63 Q100 70 107 63" stroke="#1e293b" strokeWidth="2" fill="none" strokeLinecap="round" />
-
-      {/* Left Arm Raised (Fist) */}
       <path d="M75 90 L40 50" stroke="url(#skinGrad)" strokeWidth="10" strokeLinecap="round" />
       <circle cx="40" cy="50" r="8" fill="url(#skinGrad)" />
-
-      {/* Right Arm Holding Trophy */}
       <path d="M125 90 L160 65" stroke="url(#skinGrad)" strokeWidth="10" strokeLinecap="round" />
-      
-      {/* Trophy */}
       <g transform="translate(145, 10)">
         <path d="M10 10 H40 L38 35 C38 45 32 50 25 50 C18 50 12 45 12 35 Z" fill="url(#trophyGrad)" stroke="#854d0e" strokeWidth="1" />
         <path d="M10 15 H5 C2 15 2 25 5 25 H10 M40 15 H45 C48 15 48 25 45 25 H40" fill="none" stroke="#fbbf24" strokeWidth="4" strokeLinecap="round" />
@@ -140,6 +119,15 @@ const IsometricDie = ({ value, rolling }: { value: number, rolling: boolean }) =
   </svg>
 );
 
+const ChatBubble = ({ text, color, isHost }: { text: string, color: string, isHost: boolean }) => (
+  <div className={`absolute bottom-full mb-3 px-3 py-1.5 rounded-xl border shadow-xl animate-in fade-in zoom-in slide-in-from-bottom-2 duration-300 max-w-[120px] z-[120]`}
+       style={{ backgroundColor: `${color}cc`, borderColor: 'rgba(255,255,255,0.4)' }}>
+    <p className="text-[10px] font-bold text-white leading-tight text-center break-words">{text}</p>
+    <div className={`absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px]`} 
+         style={{ borderTopColor: `${color}cc` }} />
+  </div>
+);
+
 const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUpdate }) => {
   const [inputCode, setInputCode] = useState('');
   const [rolling, setRolling] = useState(false);
@@ -152,6 +140,12 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
   const [visualGuestPos, setVisualGuestPos] = useState(game?.guestPos || 1);
   const [isAnimating, setIsAnimating] = useState(false);
   const gameRef = useRef<GameState | null>(game);
+
+  // Chat States
+  const [chatInput, setChatInput] = useState('');
+  const [hostMsg, setHostMsg] = useState<{ text: string, timestamp: number } | null>(null);
+  const [guestMsg, setGuestMsg] = useState<{ text: string, timestamp: number } | null>(null);
+  const [currentTime, setCurrentTime] = useState(Date.now());
   
   useEffect(() => { gameRef.current = game; }, [game]);
 
@@ -161,6 +155,11 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
       setVisualGuestPos(game.guestPos);
     }
   }, [game?.id]);
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const isMyTurn = !!(game && myProfile && (
     (game.turn === 'host' && game.hostId === myProfile.uniqueId) ||
@@ -242,6 +241,20 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
           if (remoteGame.hostPos !== current.hostPos || remoteGame.guestPos !== current.guestPos || remoteGame.turn !== current.turn || remoteGame.guestId !== current.guestId || remoteGame.winner !== current.winner || remoteGame.lastUpdated !== current.lastUpdated) {
             setGame(remoteGame); 
           }
+
+          // Polling for messages
+          if (game.guestId) {
+             const opponentId = game.hostId === myProfile.uniqueId ? game.guestId : game.hostId;
+             const msgs = await dbService.getMessages(myProfile.uniqueId, opponentId);
+             if (msgs.length > 0) {
+               const latest = msgs[msgs.length - 1];
+               if (latest.senderId === game.hostId) {
+                 setHostMsg({ text: latest.text, timestamp: latest.timestamp });
+               } else {
+                 setGuestMsg({ text: latest.text, timestamp: latest.timestamp });
+               }
+             }
+          }
         } catch (e) { console.debug("Sync failed"); }
       }, 2000);
     }
@@ -311,6 +324,25 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
     setRolling(false);
   };
 
+  const handleSendChat = async () => {
+    if (!chatInput.trim() || !game || !myProfile || !game.guestId) return;
+    const opponentId = game.hostId === myProfile.uniqueId ? game.guestId : game.hostId;
+    const msg: ChatMessage = {
+      id: '',
+      senderId: myProfile.uniqueId,
+      receiverId: opponentId,
+      text: chatInput.trim(),
+      timestamp: Date.now()
+    };
+    await dbService.sendMessage(msg);
+    setChatInput('');
+    if (myProfile.uniqueId === game.hostId) {
+      setHostMsg({ text: msg.text, timestamp: msg.timestamp });
+    } else {
+      setGuestMsg({ text: msg.text, timestamp: msg.timestamp });
+    }
+  };
+
   const getCellCoords = (cell: number) => {
     const row = Math.floor((cell - 1) / 10);
     const col = (cell - 1) % 10;
@@ -368,6 +400,9 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
     );
   }
 
+  const showHostMsg = hostMsg && (currentTime - hostMsg.timestamp < MESSAGE_LIFETIME_MS);
+  const showGuestMsg = guestMsg && (currentTime - guestMsg.timestamp < MESSAGE_LIFETIME_MS);
+
   return (
     <div className="flex flex-col h-[100dvh] bg-slate-950 text-white overflow-hidden relative pb-32">
       {game.winner && iWon && <Confetti />}
@@ -389,13 +424,15 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-4 flex flex-col items-center">
-        <div className="flex justify-center items-center gap-3 mb-4">
+        <div className="flex justify-center items-center gap-3 mb-4 mt-6">
            <div className={`px-2 py-1.5 rounded-xl border flex flex-col items-center min-w-[85px] relative ${game.turn === 'host' ? 'bg-indigo-600 border-white scale-105' : 'bg-slate-800 border-white/10 opacity-80'}`}>
+              {showHostMsg && <ChatBubble text={hostMsg.text} color="#4f46e5" isHost={true} />}
               <span className="text-base font-black text-white leading-none">{game.hostLastDice || '-'}</span>
               <span className="text-[8px] font-black mt-0.5 uppercase tracking-widest truncate max-w-[75px]">{game.hostId}</span>
               {game.turn === 'host' && !game.winner && <div className="flex items-center gap-1 mt-1 text-white"><Clock size={8} /><span className="text-[7px] font-black">{formatTime(timeLeft)}</span></div>}
            </div>
            <div className={`px-2 py-1.5 rounded-xl border flex flex-col items-center min-w-[85px] relative ${game.turn === 'guest' ? 'bg-emerald-600 border-white scale-105' : 'bg-slate-800 border-white/10 opacity-80'}`}>
+              {showGuestMsg && <ChatBubble text={guestMsg.text} color="#10b981" isHost={false} />}
               <span className="text-base font-black text-white leading-none">{game.guestLastDice || '-'}</span>
               <span className="text-[8px] font-black mt-0.5 uppercase tracking-widest truncate max-w-[75px]">{game.guestId || ''}</span>
               {game.turn === 'guest' && !game.winner && game.guestId && <div className="flex items-center gap-1 mt-1 text-white"><Clock size={8} /><span className="text-[7px] font-black">{formatTime(timeLeft)}</span></div>}
@@ -435,27 +472,16 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
               const e = getCellCoords(end);
               const color = getSnakeColor(parseInt(start));
               const path = `M ${s.x} ${s.y} C ${(s.x+e.x)/2 + 8} ${(s.y+e.y)/2 - 8}, ${(s.x+e.x)/2 - 8} ${(s.y+e.y)/2 + 8}, ${e.x} ${e.y}`;
-              
               return (
                 <g key={`snake-${start}`} className="drop-shadow-xl">
-                  {/* Outer glow and shadow for snake body */}
                   <path d={path} fill="none" stroke="black" strokeWidth="2.2" strokeLinecap="round" opacity="0.2" />
-                  
-                  {/* Snake body */}
                   <path d={path} fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
-                  
-                  {/* Snake Pattern (Scales) */}
                   <path d={path} fill="none" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeDasharray="0.5 2" opacity="0.4" />
-                  
-                  {/* Snake Head */}
                   <g transform={`translate(${s.x}, ${s.y})`}>
                     <circle r="2.2" fill={color} stroke="black" strokeWidth="0.3" />
-                    {/* Glowing Eyes */}
                     <circle cx="-0.6" cy="-0.6" r="0.4" fill="#fff" filter="url(#glow)" />
                     <circle cx="0.6" cy="-0.6" r="0.4" fill="#fff" filter="url(#glow)" />
                   </g>
-
-                  {/* Snake Tail (Tapered) */}
                   <circle cx={e.x} cy={e.y} r="0.8" fill={color} stroke="black" strokeWidth="0.2" />
                 </g>
               );
@@ -488,14 +514,34 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
             <button onClick={confirmLeave} className="w-full mt-8 py-4 bg-white text-black rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 shadow-xl transition-all">BACK TO LOBBY</button>
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-0.5 pointer-events-auto">
-            {/* Fix typo: changed iAnimating to isAnimating in the class name template string */}
-            <button disabled={!isMyTurn || rolling || isAnimating || !game.guestId} onClick={rollDice} className={`w-12 h-12 rounded-[1rem] transition-all active:scale-90 relative ${!isMyTurn || rolling || isAnimating || !game.guestId ? 'opacity-40 grayscale pointer-events-none' : 'hover:scale-110'}`}>
-              <IsometricDie value={rolling ? rollingDiceValue : (game.lastDice || 1)} rolling={rolling} />
-              {isMyTurn && game.guestId && !rolling && !isAnimating && <div className="absolute -top-1 -right-1 w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center border-2 border-white animate-pulse"><Sparkles size={10} className="text-white" /></div>}
-            </button>
-            <div className="text-center min-h-[10px]">
-              {game.guestId && <p className={`text-[7px] font-black uppercase tracking-widest ${isMyTurn ? 'text-white' : 'text-slate-500'}`}>{isMyTurn ? "Roll!" : "Opponent"}</p>}
+          <div className="flex flex-col items-center gap-2 pointer-events-auto w-full max-w-sm">
+            {/* Minimal Chat Input */}
+            {game.guestId && (
+              <div className="w-full px-4 mb-2">
+                <div className="bg-slate-900/40 backdrop-blur-xl rounded-2xl border border-white/10 flex items-center p-1 shadow-inner ring-1 ring-white/5">
+                  <input 
+                    type="text" 
+                    value={chatInput} 
+                    onChange={(e) => setChatInput(e.target.value)} 
+                    onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
+                    placeholder="Quick msg..."
+                    className="flex-1 bg-transparent border-none outline-none text-[10px] font-bold text-white px-3 py-2 placeholder:text-slate-500"
+                  />
+                  <button onClick={handleSendChat} disabled={!chatInput.trim()} className="p-2 bg-indigo-600 text-white rounded-xl active:scale-90 disabled:opacity-40 transition-all">
+                    <Send size={12} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-col items-center gap-0.5">
+              <button disabled={!isMyTurn || rolling || isAnimating || !game.guestId} onClick={rollDice} className={`w-12 h-12 rounded-[1rem] transition-all active:scale-90 relative ${!isMyTurn || rolling || isAnimating || !game.guestId ? 'opacity-40 grayscale pointer-events-none' : 'hover:scale-110'}`}>
+                <IsometricDie value={rolling ? rollingDiceValue : (game.lastDice || 1)} rolling={rolling} />
+                {isMyTurn && game.guestId && !rolling && !isAnimating && <div className="absolute -top-1 -right-1 w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center border-2 border-white animate-pulse"><Sparkles size={10} className="text-white" /></div>}
+              </button>
+              <div className="text-center min-h-[10px]">
+                {game.guestId && <p className={`text-[7px] font-black uppercase tracking-widest ${isMyTurn ? 'text-white' : 'text-slate-500'}`}>{isMyTurn ? "Roll!" : "Opponent"}</p>}
+              </div>
             </div>
           </div>
         )}
