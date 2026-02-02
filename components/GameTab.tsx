@@ -16,6 +16,7 @@ interface GameTabProps {
 
 const TURN_TIMEOUT_SECONDS = 60;
 const ECHO_DURATION = 4000;
+const SYNC_INTERVAL = 1500;
 
 const REACTIONS = [
   { icon: '😂', label: 'LOL', color: '#fbbf24' },
@@ -49,12 +50,12 @@ const Confetti = () => (
   </div>
 );
 
-const ReactionBubble: React.FC<{ text: string, playerColor: string, visible: boolean }> = ({ text, visible }) => {
+const ReactionBubble: React.FC<{ text: string, visible: boolean }> = ({ text, visible }) => {
   if (!visible || !text) return null;
 
   return (
     <div className="absolute inset-0 flex items-center justify-center z-[500] pointer-events-none overflow-visible">
-      <div className="text-3xl animate-reaction-pop drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]">
+      <div className="text-3xl animate-reaction-pop drop-shadow-[0_0_15px_rgba(255,255,255,0.8)] select-none">
         {text}
       </div>
     </div>
@@ -64,7 +65,7 @@ const ReactionBubble: React.FC<{ text: string, playerColor: string, visible: boo
 const CelebratingPlayer = () => (
   <div className="relative w-48 h-56 mx-auto mb-4 scale-110">
     <div className="absolute inset-0 bg-indigo-500/10 blur-[60px] rounded-full animate-pulse"></div>
-    <svg viewBox="0 0 200 240" className="w-full h-full drop-shadow-[0_15px_25px_rgba(0,0,0,0.5)] relative z-10 animate-victory-bounce">
+    <svg viewBox="0 0 200 240" className="w-full h-full drop-shadow-[0_15px_25_rgba(0,0,0,0.5)] relative z-10 animate-victory-bounce">
       <defs>
         <linearGradient id="skinGrad" x1="0%" x2="100%" y1="0%" y2="100%">
           <stop offset="0%" style={{ stopColor: '#ffdbac', stopOpacity: 1 }} />
@@ -105,13 +106,6 @@ const CelebratingPlayer = () => (
         <rect x="15" y="58" width="20" height="6" rx="1" fill="#1e293b" />
       </g>
     </svg>
-    <style>{`
-      @keyframes victory-bounce {
-        0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-15px); }
-      }
-      .animate-victory-bounce { animation: victory-bounce 1.5s ease-in-out infinite; }
-    `}</style>
   </div>
 );
 
@@ -157,46 +151,33 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
 
   useEffect(() => { gameRef.current = game; }, [game]);
 
-  // Sync echoes from remote state
+  // Sync board positions and check for reactions in the game object directly
   useEffect(() => {
     if (game) {
       setVisualHostPos(game.hostPos);
       setVisualGuestPos(game.guestPos);
-      
-      if (game.hostReaction) {
-        const [text, timeStr] = game.hostReaction.split('|');
-        const time = parseInt(timeStr);
-        if (Date.now() - time < ECHO_DURATION) {
-          setHostEcho({ text, time });
-        }
-      }
-      if (game.guestReaction) {
-        const [text, timeStr] = game.guestReaction.split('|');
-        const time = parseInt(timeStr);
-        if (Date.now() - time < ECHO_DURATION) {
-          setGuestEcho({ text, time });
-        }
-      }
-    }
-  }, [game?.id, game?.hostReaction, game?.guestReaction]);
 
-  // Local cleanup timers for echoes
+      const checkReaction = (reactionStr: string | undefined, setter: (val: any) => void) => {
+        if (!reactionStr) return;
+        const [text, timeStr] = reactionStr.split('|');
+        const time = parseInt(timeStr);
+        if (Date.now() - time < ECHO_DURATION) {
+          setter({ text, time });
+        }
+      };
+
+      checkReaction(game.hostReaction, setHostEcho);
+      checkReaction(game.guestReaction, setGuestEcho);
+    }
+  }, [game?.id, game?.hostPos, game?.guestPos, game?.hostReaction, game?.guestReaction]);
+
+  // Reaction cleanup
   useEffect(() => {
-    let hostTimer: any;
-    let guestTimer: any;
-    
-    if (hostEcho) {
-      const remaining = ECHO_DURATION - (Date.now() - hostEcho.time);
-      hostTimer = setTimeout(() => setHostEcho(null), Math.max(0, remaining));
-    }
-    if (guestEcho) {
-      const remaining = ECHO_DURATION - (Date.now() - guestEcho.time);
-      guestTimer = setTimeout(() => setGuestEcho(null), Math.max(0, remaining));
-    }
-    
+    const hostCleanup = hostEcho ? setTimeout(() => setHostEcho(null), ECHO_DURATION) : null;
+    const guestCleanup = guestEcho ? setTimeout(() => setGuestEcho(null), ECHO_DURATION) : null;
     return () => {
-      clearTimeout(hostTimer);
-      clearTimeout(guestTimer);
+      if (hostCleanup) clearTimeout(hostCleanup);
+      if (guestCleanup) clearTimeout(guestCleanup);
     };
   }, [hostEcho?.time, guestEcho?.time]);
 
@@ -271,17 +252,29 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
           if (!remoteGame) { setGame(null); return; }
           const current = gameRef.current;
           if (!current || current.id !== remoteGame.id) return;
+          
           if (remoteGame.winner && statsUpdatedForGame !== remoteGame.id) {
             const iWon = remoteGame.winner === myProfile.uniqueId;
             await syncMyStatsLocally(iWon, remoteGame.id!);
             setGame(remoteGame);
             return;
           }
-          if (remoteGame.hostPos !== current.hostPos || remoteGame.guestPos !== current.guestPos || remoteGame.turn !== current.turn || remoteGame.guestId !== current.guestId || remoteGame.winner !== current.winner || remoteGame.lastUpdated !== current.lastUpdated || remoteGame.hostReaction !== current.hostReaction || remoteGame.guestReaction !== current.guestReaction) {
+
+          const hasChanged = 
+            remoteGame.hostPos !== current.hostPos || 
+            remoteGame.guestPos !== current.guestPos || 
+            remoteGame.turn !== current.turn || 
+            remoteGame.guestId !== current.guestId || 
+            remoteGame.winner !== current.winner || 
+            remoteGame.hostReaction !== current.hostReaction ||
+            remoteGame.guestReaction !== current.guestReaction ||
+            remoteGame.lastUpdated !== current.lastUpdated;
+
+          if (hasChanged) {
             setGame(remoteGame); 
           }
         } catch (e) { console.debug("Sync failed"); }
-      }, 2000);
+      }, SYNC_INTERVAL);
     }
     return () => { isActive = false; clearInterval(interval); };
   }, [game?.id, game?.winner, game?.code, myProfile?.uniqueId, statsUpdatedForGame, syncMyStatsLocally, setGame]);
@@ -292,7 +285,7 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
     const timestamp = Date.now();
     const reactionString = `${icon}|${timestamp}`;
     
-    // Update locally immediately for better feel
+    // Optimistic local update
     if (isHost) setHostEcho({ text: icon, time: timestamp });
     else setGuestEcho({ text: icon, time: timestamp });
 
@@ -301,6 +294,7 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
       [isHost ? 'hostReaction' : 'guestReaction']: reactionString,
       lastUpdated: Date.now() 
     };
+    
     await dbService.updateGame(update);
     setGame(update);
   };
@@ -447,16 +441,16 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col items-center">
-        {/* Status Area - Emojis pop INSIDE these cards */}
+        {/* Status Area */}
         <div className="flex justify-center items-center gap-3 mb-6 mt-6 sticky top-0 z-[400] w-full">
-           <div className={`px-2 py-1.5 rounded-xl border flex flex-col items-center min-w-[85px] relative transition-all duration-300 ${game.turn === 'host' ? 'bg-indigo-600 border-white scale-105 shadow-[0_0_20px_rgba(79,70,229,0.4)]' : 'bg-slate-800 border-white/10 opacity-80'}`}>
-              <ReactionBubble key={hostEcho?.time} text={hostEcho?.text || ''} playerColor="#4f46e5" visible={!!hostEcho} />
+           <div className={`px-2 py-1.5 rounded-xl border flex flex-col items-center min-w-[85px] relative transition-all duration-300 overflow-visible ${game.turn === 'host' ? 'bg-indigo-600 border-white scale-105 shadow-[0_0_20px_rgba(79,70,229,0.4)]' : 'bg-slate-800 border-white/10 opacity-80'}`}>
+              <ReactionBubble key={`${game.hostReaction}`} text={hostEcho?.text || ''} visible={!!hostEcho} />
               <span className="text-base font-black text-white leading-none">{game.hostLastDice || '-'}</span>
               <span className="text-[8px] font-black mt-0.5 uppercase tracking-widest truncate max-w-[75px]">{game.hostId}</span>
               {game.turn === 'host' && !game.winner && <div className="flex items-center gap-1 mt-1 text-white"><Clock size={8} /><span className="text-[7px] font-black">{formatTime(timeLeft)}</span></div>}
            </div>
-           <div className={`px-2 py-1.5 rounded-xl border flex flex-col items-center min-w-[85px] relative transition-all duration-300 ${game.turn === 'guest' ? 'bg-emerald-600 border-white scale-105 shadow-[0_0_20px_rgba(16,185,129,0.4)]' : 'bg-slate-800 border-white/10 opacity-80'}`}>
-              <ReactionBubble key={guestEcho?.time} text={guestEcho?.text || ''} playerColor="#10b981" visible={!!guestEcho} />
+           <div className={`px-2 py-1.5 rounded-xl border flex flex-col items-center min-w-[85px] relative transition-all duration-300 overflow-visible ${game.turn === 'guest' ? 'bg-emerald-600 border-white scale-105 shadow-[0_0_20px_rgba(16,185,129,0.4)]' : 'bg-slate-800 border-white/10 opacity-80'}`}>
+              <ReactionBubble key={`${game.guestReaction}`} text={guestEcho?.text || ''} visible={!!guestEcho} />
               <span className="text-base font-black text-white leading-none">{game.guestLastDice || '-'}</span>
               <span className="text-[8px] font-black mt-0.5 uppercase tracking-widest truncate max-w-[75px]">{game.guestId || ''}</span>
               {game.turn === 'guest' && !game.winner && game.guestId && <div className="flex items-center gap-1 mt-1 text-white"><Clock size={8} /><span className="text-[7px] font-black">{formatTime(timeLeft)}</span></div>}

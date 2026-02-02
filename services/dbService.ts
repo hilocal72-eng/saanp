@@ -251,6 +251,8 @@ export const dbService = {
       lastDice: 0, 
       hostLastDice: 0,
       guestLastDice: 0,
+      hostReaction: "",
+      guestReaction: "",
       lastUpdated: Date.now() 
     };
     const result = await airtableFetch(AIRTABLE_CONFIG.TABLES.GAMES, {
