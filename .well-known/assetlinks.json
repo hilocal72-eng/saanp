@@ -1,8 +1,0 @@
-[{
-      "relation": ["delegate_permission/common.handle_all_urls"],
-      "target": {
-        "namespace": "android_app",
-        "package_name": "dev.pages.saanp.twa",
-        "sha256_cert_fingerprints": ["AF:8D:B7:EA:01:BF:C7:F5:68:60:30:3A:77:B9:4D:AB:A9:7E:5F:2A:CA:02:AD:71:E8:61:E6:6D:07:A8:86:90"]
-      }
-    }]
