@@ -7,6 +7,7 @@ export interface UserProfile {
   name: string;
   pin: string;
   gender: Gender;
+  avatarUrl?: string; // Base64 encoded compressed image
   lastSeen?: number; // Timestamp
   wins?: number;
   losses?: number;

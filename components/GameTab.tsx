@@ -4,7 +4,7 @@ import { GameState, UserProfile } from '../types';
 import { dbService } from '../services/dbService';
 import { LADDERS, SNAKES, BOARD_CELLS } from '../constants';
 import { 
-  Trophy, Sword, Frown, Star, Clock, Sparkles, Smile, Flame, LogOut
+  Trophy, Sword, Frown, Star, Clock, Sparkles, Smile, Flame, LogOut, AlertCircle, CheckCircle2, User
 } from 'lucide-react';
 
 interface GameTabProps {
@@ -38,13 +38,10 @@ const FirecrackerBlast = ({ delay, colorSet, xOffset = "50%", yOffset = "50%" }:
   const sparkCount = 32;
   return (
     <div className="absolute inset-0 pointer-events-none">
-      {/* Central Flash */}
       <div 
         className="absolute w-12 h-12 rounded-full bg-white blur-md animate-flash z-10"
         style={{ left: xOffset, top: yOffset, transform: 'translate(-50%, -50%)', animationDelay: delay }}
       />
-      
-      {/* Expanding Sparks */}
       <div className="absolute" style={{ left: xOffset, top: yOffset }}>
         {[...Array(sparkCount)].map((_, i) => {
           const angle = (i * 360) / sparkCount + (Math.random() * 20);
@@ -54,7 +51,6 @@ const FirecrackerBlast = ({ delay, colorSet, xOffset = "50%", yOffset = "50%" }:
           const dy = Math.sin(radian) * distance;
           const size = 2 + Math.random() * 4;
           const color = colorSet[i % colorSet.length];
-          
           return (
             <div 
               key={i}
@@ -76,54 +72,189 @@ const FirecrackerBlast = ({ delay, colorSet, xOffset = "50%", yOffset = "50%" }:
   );
 };
 
-// Internal Board Overlay Component - Strictly contained within the board boundaries
+const GoldenTrophy = ({ size = 64, className = "", isMuted = false }: { size?: number, className?: string, isMuted?: boolean }) => (
+  <div className={`relative ${className} flex items-center justify-center`} style={{ width: size, height: size }}>
+    <img 
+      src="https://cdn-icons-png.flaticon.com/512/3112/3112946.png" 
+      className={`w-full h-full object-contain transition-all duration-700 ${isMuted ? 'grayscale opacity-30 brightness-50' : 'drop-shadow-[0_0_25px_rgba(251,191,36,0.7)]'}`}
+      alt="Trophy"
+    />
+    {!isMuted && <div className="absolute inset-0 rounded-full shine-effect pointer-events-none mix-blend-overlay opacity-50" />}
+  </div>
+);
+
+const SadFaceIcon = ({ size = 60 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" className="drop-shadow-[0_15px_30px_rgba(0,0,0,0.5)]">
+    <defs>
+      <linearGradient id="sad-face-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stopColor="#e5e7eb" />
+        <stop offset="100%" stopColor="#9ca3af" />
+      </linearGradient>
+    </defs>
+    {/* Body */}
+    <circle cx="50" cy="50" r="48" fill="url(#sad-face-gradient)" />
+    {/* Eyes */}
+    <circle cx="32" cy="45" r="7" fill="#4b5563" />
+    <circle cx="68" cy="45" r="7" fill="#4b5563" />
+    {/* Sad Mouth */}
+    <path 
+      d="M 28 80 Q 50 55 72 80" 
+      fill="none" 
+      stroke="#4b5563" 
+      strokeWidth="11" 
+      strokeLinecap="round" 
+    />
+  </svg>
+);
+
+const WinnerBannerDisplay = ({ isMe = true }: { isMe?: boolean }) => {
+  const isMuted = !isMe;
+  const color = isMuted ? "#475569" : "#BF953F";
+  const lightColor = isMuted ? "#94a3b8" : "#FCF6BA";
+
+  return (
+    <div className="relative flex flex-col items-center justify-center scale-110 sm:scale-125">
+      <svg width="240" height="240" viewBox="0 0 200 200" className="overflow-visible">
+        <defs>
+          <linearGradient id="banner-gold" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor={color} />
+            <stop offset="25%" stopColor={lightColor} />
+            <stop offset="50%" stopColor={color} />
+            <stop offset="100%" stopColor={isMuted ? "#1e293b" : "#805a00"} />
+          </linearGradient>
+          <path id="curve" d="M 40,80 A 60,60 0 0,1 160,80" />
+        </defs>
+
+        {/* TOP ICON */}
+        {isMe ? (
+          <path 
+            d="M 100,5 L 103,14 L 112,14 L 105,20 L 108,29 L 100,23 L 92,29 L 95,20 L 88,14 L 97,14 Z" 
+            fill="url(#banner-gold)" 
+            className="animate-pulse"
+          />
+        ) : (
+           <text x="100" y="25" textAnchor="middle" fill="url(#banner-gold)" fontSize="14" fontWeight="900" className="opacity-40">✕</text>
+        )}
+
+        {/* CURVED TEXT */}
+        <text fill="url(#banner-gold)" fontSize="10" fontWeight="900" className="uppercase tracking-tighter">
+          <textPath href="#curve" startOffset="50%" textAnchor="middle">
+            {isMe ? 'CONGRATULATIONS' : 'GAME OVER'}
+          </textPath>
+        </text>
+
+        {/* LAURELS */}
+        <g stroke="url(#banner-gold)" fill="none" strokeWidth="1.5">
+          <path d="M 75,130 C 50,120 45,80 65,50" opacity="0.8" />
+          <path d="M 125,130 C 150,120 155,80 135,50" opacity="0.8" />
+          {[0, 0.2, 0.4, 0.6, 0.8, 1].map(t => (
+            <React.Fragment key={t}>
+               <circle cx={65 - t*15} cy={50 + t*70} r="2" fill="url(#banner-gold)" />
+               <circle cx={135 + t*15} cy={50 + t*70} r="2" fill="url(#banner-gold)" />
+            </React.Fragment>
+          ))}
+        </g>
+
+        {/* RIBBON BACKGROUND FOLDS */}
+        <path d="M 30,155 L 50,140 L 50,170 L 30,175 Z" fill={isMuted ? "#1e293b" : "#805a00"} opacity="0.6" />
+        <path d="M 170,155 L 150,140 L 150,170 L 170,175 Z" fill={isMuted ? "#1e293b" : "#805a00"} opacity="0.6" />
+
+        {/* MAIN RIBBON FRONT */}
+        <path 
+          d="M 40,145 C 70,135 130,135 160,145 L 165,175 C 130,165 70,165 35,175 Z" 
+          fill="url(#banner-gold)" 
+          stroke={isMuted ? "#1e293b" : "#4d3300"}
+          strokeWidth="0.5"
+        />
+
+        {/* RIBBON TEXT: WINNER or Loser */}
+        <text 
+          x="100" 
+          y="160" 
+          textAnchor="middle" 
+          fill={isMuted ? "#f1f5f9" : "#4d3300"} 
+          fontSize={isMe ? "18" : "16"} 
+          fontWeight="900" 
+          className="italic tracking-tighter select-none"
+        >
+          {isMe ? 'WINNER' : 'Loser'}
+        </text>
+      </svg>
+      
+      {/* CENTRAL OVERLAY */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[60%] flex items-center justify-center">
+        {isMe ? (
+          <GoldenTrophy size={110} isMuted={false} />
+        ) : (
+          <div className="animate-bounce">
+            <SadFaceIcon size={60} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Internal Board Overlay Component
 const BoardCelebration = ({ winnerName, isMe }: { winnerName: string, isMe: boolean }) => {
   const fireworkColors = ['#ffffff', '#fef08a', '#fbbf24', '#facc15', '#ef4444', '#3b82f6'];
 
   return (
     <div className="absolute inset-0 pointer-events-none z-[120] flex items-center justify-center bg-[#020d1a]/85 backdrop-blur-[1.5px] overflow-hidden rounded-lg">
-      {/* CONCENTRATED BLASTS */}
-      <div className="absolute inset-0">
-        <FirecrackerBlast delay="0s" colorSet={fireworkColors} xOffset="50%" yOffset="50%" />
-        <FirecrackerBlast delay="0.4s" colorSet={fireworkColors} xOffset="25%" yOffset="30%" />
-        <FirecrackerBlast delay="0.8s" colorSet={fireworkColors} xOffset="75%" yOffset="40%" />
-        <FirecrackerBlast delay="1.2s" colorSet={fireworkColors} xOffset="40%" yOffset="75%" />
-        <FirecrackerBlast delay="1.6s" colorSet={fireworkColors} xOffset="65%" yOffset="80%" />
-      </div>
+      {isMe && (
+        <div className="absolute inset-0">
+          <FirecrackerBlast delay="0s" colorSet={fireworkColors} xOffset="50%" yOffset="50%" />
+          <FirecrackerBlast delay="0.4s" colorSet={fireworkColors} xOffset="25%" yOffset="30%" />
+          <FirecrackerBlast delay="0.8s" colorSet={fireworkColors} xOffset="75%" yOffset="40%" />
+          <FirecrackerBlast delay="1.2s" colorSet={fireworkColors} xOffset="40%" yOffset="75%" />
+          <FirecrackerBlast delay="1.6s" colorSet={fireworkColors} xOffset="65%" yOffset="80%" />
+        </div>
+      )}
 
       <div className="relative flex flex-col items-center px-4 z-20">
         <div className="animate-winner-zoom flex flex-col items-center">
-          <h2 className="text-6xl sm:text-7xl font-black italic tracking-tightest uppercase text-center select-none leading-none">
-            <span className={`block text-glow-yellow ${isMe ? 'text-[#facc15]' : 'text-slate-100'}`}>
-              {isMe ? 'WINNER' : 'DEFEAT'}
-            </span>
-          </h2>
           
-          <div className="mt-6 flex items-center gap-2 bg-black/80 px-6 py-2.5 rounded-2xl border border-white/20 backdrop-blur-md shadow-[0_10px_40px_rgba(0,0,0,0.5)]">
-            <Trophy size={18} className={isMe ? 'text-yellow-400' : 'text-slate-400'} />
-            <p className="text-white font-black text-xs uppercase tracking-[0.2em]">
-               {isMe ? 'Victory!' : `${winnerName} wins`}
-            </p>
+          <WinnerBannerDisplay isMe={isMe} />
+
+          <div className={`mt-2 flex flex-col items-center gap-2 bg-black/80 px-6 py-3 rounded-2xl border border-white/20 backdrop-blur-md shadow-[0_10px_40px_rgba(0,0,0,0.5)]`}>
+            {isMe ? (
+              <div className="flex items-center gap-2">
+                <Trophy size={18} className="text-yellow-400" />
+                <p className="text-white font-black text-xs uppercase tracking-[0.2em]">
+                  Victory!
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-1">
+                <p className="text-slate-100 font-black text-xs uppercase tracking-widest text-center italic">
+                   Better Luck next time
+                </p>
+                <p className="text-slate-400 font-bold text-[8px] uppercase tracking-widest text-center mt-1">
+                   {winnerName} conquered the arena
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>
       
-      {/* SUBTLE DRIFTING PARTICLES - Percentage-based to avoid screen-wide leaking */}
-      <div className="absolute inset-0 overflow-hidden opacity-40">
-        {[...Array(20)].map((_, i) => (
-          <div 
-            key={i}
-            className="absolute w-1 h-1 rounded-full animate-confetti-fall"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: '-5%',
-              backgroundColor: '#ffffff',
-              animationDelay: `${Math.random() * 2}s`,
-              animationDuration: `${3 + Math.random() * 2}s`,
-            }}
-          />
-        ))}
-      </div>
+      {isMe && (
+        <div className="absolute inset-0 overflow-hidden opacity-40">
+          {[...Array(20)].map((_, i) => (
+            <div 
+              key={i}
+              className="absolute w-1 h-1 rounded-full animate-confetti-fall"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: '-5%',
+                backgroundColor: '#ffffff',
+                animationDelay: `${Math.random() * 2}s`,
+                animationDuration: `${3 + Math.random() * 2}s`,
+              }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -177,17 +308,66 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
   const [isAnimating, setIsAnimating] = useState(false);
   const [hostEcho, setHostEcho] = useState<{ text: string, time: number } | null>(null);
   const [guestEcho, setGuestEcho] = useState<{ text: string, time: number } | null>(null);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+  const [avatars, setAvatars] = useState<Record<string, string>>({});
   const gameRef = useRef<GameState | null>(game);
 
   useEffect(() => { gameRef.current = game; }, [game]);
 
+  // Resolve avatars for host and guest dynamically
+  useEffect(() => {
+    const hostId = game?.hostId;
+    const guestId = game?.guestId;
+    if (!hostId) return;
+
+    const fetchAvatars = async () => {
+      const needed = [];
+      if (hostId && !avatars[hostId]) needed.push(hostId);
+      if (guestId && !avatars[guestId]) needed.push(guestId);
+      
+      if (needed.length === 0) return;
+
+      const fetched: Record<string, string> = {};
+      for (const uid of needed) {
+        const profile = await dbService.findPlayerGlobal(uid);
+        if (profile?.avatarUrl) {
+          fetched[uid] = profile.avatarUrl;
+        }
+      }
+
+      if (Object.keys(fetched).length > 0) {
+        setAvatars(prev => ({ ...prev, ...fetched }));
+      }
+    };
+    fetchAvatars();
+  }, [game?.hostId, game?.guestId]);
+
+  useEffect(() => {
+    if (feedback) {
+      const t = setTimeout(() => setFeedback(null), 3000);
+      return () => clearTimeout(t);
+    }
+  }, [feedback]);
+
+  useEffect(() => {
+    setHostEcho(null);
+    setGuestEcho(null);
+  }, [game?.id]);
+
   useEffect(() => {
     if (game) {
       const checkReaction = (reactionStr: string | undefined, setter: (val: any) => void) => {
-        if (!reactionStr) return;
+        if (!reactionStr) {
+          setter(null);
+          return;
+        }
         const [text, timeStr] = reactionStr.split('|');
         const time = parseInt(timeStr);
-        if (Date.now() - time < ECHO_DURATION) setter({ text, time });
+        if (Date.now() - time < ECHO_DURATION) {
+          setter({ text, time });
+        } else {
+          setter(null);
+        }
       };
       checkReaction(game.hostReaction, setHostEcho);
       checkReaction(game.guestReaction, setGuestEcho);
@@ -312,27 +492,36 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
     setLoading(true);
     try {
       const code = Math.floor(1000 + Math.random() * 9000).toString();
-      const newGame = await dbService.hostGame(myProfile.uniqueId, code);
+      const newGame = await dbService.hostGame(myProfile.uniqueId, myProfile.avatarUrl, code);
       setGame(newGame);
       setVisualHostPos(1);
       setVisualGuestPos(1);
       setStatsUpdatedForGame(null);
-    } catch (e) { alert("Failed to create room."); } finally { setLoading(false); }
+    } catch (e) { 
+      setFeedback({ type: 'error', message: 'Failed to create room.' });
+    } finally { setLoading(false); }
   };
 
   const joinGame = async () => {
     if (!myProfile || inputCode.length !== 4) return;
     setLoading(true);
     try {
-      const result = await dbService.joinGame(myProfile.uniqueId, inputCode);
+      const result = await dbService.joinGame(myProfile.uniqueId, myProfile.avatarUrl, inputCode);
       if (result.game) {
         setGame(result.game);
         setVisualHostPos(result.game.hostPos);
         setVisualGuestPos(result.game.guestPos);
         setStatsUpdatedForGame(null);
         setInputCode('');
-      } else alert(result.error === 'ROOM_FULL' ? 'Room is already full.' : 'Room not found.');
-    } catch (e) { alert("Error joining game."); } finally { setLoading(false); }
+      } else {
+        setFeedback({ 
+          type: 'error', 
+          message: result.error === 'ROOM_FULL' ? 'Room is full' : 'Invalid Code' 
+        });
+      }
+    } catch (e) { 
+      setFeedback({ type: 'error', message: 'Network error.' });
+    } finally { setLoading(false); }
   };
 
   const confirmLeave = async () => {
@@ -409,10 +598,16 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
   if (!game) {
     return (
       <div className="flex flex-col min-h-[100dvh] bg-slate-950 p-8 animate-in fade-in duration-700 relative overflow-hidden">
+        {feedback && (
+          <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[250] flex items-center gap-3 px-6 py-4 rounded-2xl bg-slate-900 border border-indigo-500/30 shadow-[0_0_30px_rgba(79,70,229,0.3)] animate-in slide-in-from-top-full duration-300">
+            {feedback.type === 'success' ? <CheckCircle2 className="text-emerald-500" size={20} /> : <AlertCircle className="text-rose-500" size={20} />}
+            <span className="text-xs font-black text-white uppercase tracking-widest">{feedback.message}</span>
+          </div>
+        )}
         <div className="absolute inset-0 z-0 opacity-30 mix-blend-screen" style={{ backgroundImage: `url('https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=2070')`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
         <div className="relative z-10 flex-1 flex flex-col justify-center items-center gap-10">
           <div className="text-center flex flex-col items-center gap-4">
-            <Trophy size={64} className="text-indigo-400 animate-bounce" />
+            <GoldenTrophy size={80} className="animate-bounce" />
             <h1 className="text-5xl font-black text-white tracking-tighter uppercase italic text-center">Arena<br/><span className="text-indigo-400">Battle</span></h1>
           </div>
           <div className="w-full max-w-[260px] space-y-6 pb-48">
@@ -427,8 +622,18 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
     );
   }
 
+  const hostAvatar = avatars[game.hostId];
+  const guestAvatar = game.guestId ? avatars[game.guestId] : null;
+
   return (
     <div className="flex flex-col h-[100dvh] bg-slate-950 text-white overflow-hidden relative pb-32">
+      {feedback && (
+        <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[250] flex items-center gap-3 px-6 py-4 rounded-2xl bg-slate-900 border border-indigo-500/30 shadow-[0_0_30px_rgba(79,70,229,0.3)] animate-in slide-in-from-top-full duration-300">
+          {feedback.type === 'success' ? <CheckCircle2 className="text-emerald-500" size={20} /> : <AlertCircle className="text-rose-500" size={20} />}
+          <span className="text-xs font-black text-white uppercase tracking-widest">{feedback.message}</span>
+        </div>
+      )}
+
       {showQuitModal && (
         <div className="fixed inset-0 z-[250] flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-md">
           <div className="bg-slate-900 border border-rose-500/30 p-8 rounded-[2rem] text-center max-w-xs w-full shadow-2xl">
@@ -451,23 +656,30 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
            <div className={`px-2 py-1.5 rounded-xl border flex flex-col items-center min-w-[85px] relative transition-all duration-300 ${game.turn === 'host' ? 'bg-indigo-600 border-white scale-105 shadow-[0_0_15px_rgba(79,70,229,0.3)]' : 'bg-slate-800 border-white/10 opacity-80'}`}>
               <ReactionBubble key={`${game.hostReaction}`} text={hostEcho?.text || ''} visible={!!hostEcho} />
               <span className="text-base font-black text-white leading-none">{game.hostLastDice || '-'}</span>
-              <span className="text-[8px] font-black mt-0.5 uppercase tracking-widest truncate max-w-[75px]">{game.hostId}</span>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <div className="w-4 h-4 rounded-md overflow-hidden bg-slate-950 border border-white/10 shrink-0">
+                  {hostAvatar ? <img src={hostAvatar} className="w-full h-full object-cover" /> : <User size={10} className="m-auto text-slate-500" />}
+                </div>
+                <span className="text-[8px] font-black uppercase tracking-widest truncate max-w-[55px]">{game.hostId}</span>
+              </div>
               {game.turn === 'host' && !game.winner && <div className="flex items-center gap-1 mt-1 text-white"><Clock size={8} /><span className="text-[7px] font-black">{formatTime(timeLeft)}</span></div>}
            </div>
            <div className={`px-2 py-1.5 rounded-xl border flex flex-col items-center min-w-[85px] relative transition-all duration-300 ${game.turn === 'guest' ? 'bg-emerald-600 border-white scale-105 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'bg-slate-800 border-white/10 opacity-80'}`}>
               <ReactionBubble key={`${game.guestReaction}`} text={guestEcho?.text || ''} visible={!!guestEcho} />
               <span className="text-base font-black text-white leading-none">{game.guestLastDice || '-'}</span>
-              <span className="text-[8px] font-black mt-0.5 uppercase tracking-widest truncate max-w-[75px]">{game.guestId || ''}</span>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <div className="w-4 h-4 rounded-md overflow-hidden bg-slate-950 border border-white/10 shrink-0">
+                  {guestAvatar ? <img src={guestAvatar} className="w-full h-full object-cover" /> : <User size={10} className="m-auto text-slate-500" />}
+                </div>
+                <span className="text-[8px] font-black uppercase tracking-widest truncate max-w-[55px]">{game.guestId || 'WAITING'}</span>
+              </div>
               {game.turn === 'guest' && !game.winner && game.guestId && <div className="flex items-center gap-1 mt-1 text-white"><Clock size={8} /><span className="text-[7px] font-black">{formatTime(timeLeft)}</span></div>}
            </div>
         </div>
 
         <div className="w-full max-w-full mx-auto bg-white rounded-xl border-[4px] border-slate-900 shadow-2xl relative aspect-square mb-6 z-[60] overflow-hidden">
           <div className="absolute inset-0 flex flex-wrap z-10 rounded-lg">{renderBoard()}</div>
-          
-          {/* Victory display contained ONLY on the board */}
           {game.winner && <BoardCelebration winnerName={game.winner} isMe={iWon} />}
-
           <svg className="absolute inset-0 pointer-events-none z-[40] w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
             {Object.entries(LADDERS).map(([start, end]) => {
               const s = getCellCoords(parseInt(start));
@@ -492,6 +704,11 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
                   <path d={path} fill="none" stroke="black" strokeWidth="2.2" strokeLinecap="round" opacity="0.2" />
                   <path d={path} fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
                   <path d={path} fill="none" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeDasharray="0.5 2" opacity="0.4" />
+                  <g transform={`translate(${s.x}, ${s.y})`}>
+                    <circle r="2.5" fill={color} stroke="black" strokeWidth="0.3" />
+                    <circle cx="-0.8" cy="-0.5" r="0.4" fill="white" />
+                    <circle cx="0.8" cy="-0.5" r="0.4" fill="white" />
+                  </g>
                 </g>
               );
             })}

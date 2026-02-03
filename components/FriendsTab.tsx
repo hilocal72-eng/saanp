@@ -9,9 +9,9 @@ interface FriendsTabProps {
 }
 
 const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
-  const [friends, setFriends] = useState<(Friend & { isIncoming: boolean })[]>([]);
+  const [friends, setFriends] = useState<(Friend & { isIncoming: boolean, avatarUrl?: string })[]>([]);
   const [targetUsername, setTargetUsername] = useState('');
-  const [activeChat, setActiveChat] = useState<Friend | null>(null);
+  const [activeChat, setActiveChat] = useState<(Friend & { avatarUrl?: string }) | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMsg, setNewMsg] = useState('');
   const [searching, setSearching] = useState(false);
@@ -196,8 +196,12 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
                 </div>
               ) : viewingFriendStats ? (
                 <div className="animate-in zoom-in-95 duration-300">
-                  <div className="w-20 h-20 bg-slate-950 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-indigo-500/40 shadow-xl shadow-indigo-900/20 relative">
-                    <User size={36} className="text-white" />
+                  <div className="w-20 h-20 bg-slate-950 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-indigo-500/40 shadow-xl shadow-indigo-900/20 relative overflow-hidden">
+                    {viewingFriendStats.avatarUrl ? (
+                      <img src={viewingFriendStats.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      <User size={36} className="text-white" />
+                    )}
                     <div className="absolute -bottom-1 -right-1 bg-emerald-500 text-white p-1 rounded-lg border-2 border-slate-900"><CheckCircle2 size={12} /></div>
                   </div>
                   <h2 className="text-2xl font-black text-white uppercase tracking-tighter leading-tight mb-8">@{viewingFriendStats.name}</h2>
@@ -255,7 +259,13 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
               onClick={handleShowFriendStats}
               className="ml-2 flex items-center gap-3 active:scale-95 transition-transform hover:opacity-80 text-left"
             >
-              <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-black text-xs border border-white/20 shadow-lg shadow-indigo-900/30">{activeChat.name.charAt(0).toUpperCase()}</div>
+              <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-black text-xs border border-white/20 shadow-lg shadow-indigo-900/30 overflow-hidden">
+                {activeChat.avatarUrl ? (
+                  <img src={activeChat.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  activeChat.name.charAt(0).toUpperCase()
+                )}
+              </div>
               <div>
                 <h2 className="font-black text-white text-sm leading-none uppercase tracking-tight flex items-center gap-1.5">
                   {activeChat.name}
@@ -354,7 +364,13 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
             {incomingRequests.map(f => (
               <div key={f.id} className="bg-rose-500/20 p-4 rounded-2xl border border-rose-500/40 flex items-center justify-between shadow-lg backdrop-blur-md ring-1 ring-white/20">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-rose-500/30 flex items-center justify-center text-white font-black">{f.name.charAt(0).toUpperCase()}</div>
+                  <div className="w-10 h-10 rounded-xl bg-rose-500/30 flex items-center justify-center text-white font-black border border-white/10 overflow-hidden shadow-inner">
+                    {f.avatarUrl ? (
+                      <img src={f.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      f.name.charAt(0).toUpperCase()
+                    )}
+                  </div>
                   <h4 className="font-black text-white text-xs uppercase">{f.name}</h4>
                 </div>
                 <button onClick={() => handleAccept(f.uniqueId)} className="px-4 py-2 bg-rose-500 text-white rounded-lg text-[10px] font-black shadow-lg shadow-rose-900/40 active:scale-95">ACCEPT</button>
@@ -381,7 +397,13 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
                 <div key={f.id} onClick={() => f.status === 'accepted' && setActiveChat(f)} className={`bg-slate-900/80 backdrop-blur-3xl p-4 rounded-2xl border border-white/20 flex items-center justify-between group transition-all duration-300 ${f.status === 'accepted' ? 'hover:bg-indigo-900/30 hover:border-indigo-500/50 active:scale-[0.98] cursor-pointer' : 'opacity-60'}`}>
                   <div className="flex items-center gap-4">
                     <div className="relative">
-                      <div className="w-12 h-12 rounded-xl bg-slate-950 flex items-center justify-center text-indigo-400 font-black border border-slate-800 group-hover:border-indigo-500/60 transition-all">{f.name.charAt(0).toUpperCase()}</div>
+                      <div className="w-12 h-12 rounded-xl bg-slate-950 flex items-center justify-center text-indigo-400 font-black border border-slate-800 group-hover:border-indigo-500/60 transition-all overflow-hidden">
+                        {f.avatarUrl ? (
+                          <img src={f.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                        ) : (
+                          f.name.charAt(0).toUpperCase()
+                        )}
+                      </div>
                       {(f.unreadCount || 0) > 0 && <div className="absolute -top-1 -right-1 w-4 h-4 bg-indigo-500 rounded-full border-2 border-slate-950 flex items-center justify-center animate-bounce shadow-lg"><div className="w-1.5 h-1.5 bg-white rounded-full"></div></div>}
                     </div>
                     <div>

@@ -136,7 +136,13 @@ const App: React.FC = () => {
       <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[90%] max-w-[320px] z-[150]">
         <nav className="bg-slate-900/90 backdrop-blur-2xl rounded-[2rem] border border-white/10 shadow-2xl px-1 py-1 flex justify-around items-center">
           <button onClick={() => setActiveTab(Tab.PROFILE)} className={`flex-1 flex flex-col items-center gap-0.5 transition-all duration-300 py-2 rounded-2xl ${activeTab === Tab.PROFILE ? 'bg-indigo-600' : 'hover:bg-white/5'}`}>
-            <User size={18} className={`${activeTab === Tab.PROFILE ? 'text-white' : 'text-slate-400'}`} />
+            {myProfile?.avatarUrl ? (
+              <div className={`w-5 h-5 rounded-lg overflow-hidden border ${activeTab === Tab.PROFILE ? 'border-white' : 'border-white/20'}`}>
+                <img src={myProfile.avatarUrl} alt="Me" className="w-full h-full object-cover" />
+              </div>
+            ) : (
+              <User size={18} className={`${activeTab === Tab.PROFILE ? 'text-white' : 'text-slate-400'}`} />
+            )}
             <span className={`text-[7px] font-black uppercase tracking-widest ${activeTab === Tab.PROFILE ? 'text-white' : 'text-slate-400'}`}>Player</span>
           </button>
           <button onClick={() => setActiveTab(Tab.GAME)} className={`flex-1 flex flex-col items-center gap-0.5 transition-all duration-300 py-2 rounded-2xl ${activeTab === Tab.GAME ? 'bg-emerald-600' : 'hover:bg-white/5'}`}>

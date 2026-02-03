@@ -71,6 +71,7 @@ export const dbService = {
           name: String(f.name),
           pin: f.pin !== undefined && f.pin !== null ? String(f.pin) : '',
           gender: f.gender,
+          avatarUrl: f.avatarUrl ? String(f.avatarUrl) : undefined,
           lastSeen: f.lastSeen,
           wins: Number(f.wins || 0),
           losses: Number(f.losses || 0)
@@ -90,6 +91,13 @@ export const dbService = {
         });
       }
     } catch (e) {}
+  },
+
+  updateAvatar: async (userId: string, avatarUrl: string) => {
+    await airtableFetch(`${AIRTABLE_CONFIG.TABLES.USERS}/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ fields: { avatarUrl } })
+    });
   },
 
   incrementStats: async (username: string, isWin: boolean) => {
@@ -165,7 +173,8 @@ export const dbService = {
 
       return friendItems.map(f => ({
         ...f,
-        lastSeen: profilesByUid[f.name]?.lastSeen || 0
+        lastSeen: profilesByUid[f.name]?.lastSeen || 0,
+        avatarUrl: profilesByUid[f.name]?.avatarUrl
       }));
     } catch (e) { return []; }
   },
@@ -241,7 +250,7 @@ export const dbService = {
     return data.records.length;
   },
 
-  hostGame: async (hostName: string, code: string): Promise<GameState> => {
+  hostGame: async (hostName: string, hostAvatar: string | undefined, code: string): Promise<GameState> => {
     const fields = { 
       code: String(code), 
       hostId: hostName, 
@@ -262,7 +271,7 @@ export const dbService = {
     return parseGame(result.records[0]);
   },
 
-  joinGame: async (guestName: string, code: string): Promise<{ game?: GameState, error?: string }> => {
+  joinGame: async (guestName: string, guestAvatar: string | undefined, code: string): Promise<{ game?: GameState, error?: string }> => {
     try {
       const formula = `{code}='${code}'`;
       const data = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.GAMES}?filterByFormula=${encodeURIComponent(formula)}`);
@@ -291,10 +300,24 @@ export const dbService = {
 
   updateGame: async (game: GameState) => {
     if (!game.id) return;
-    const { id, ...fields } = game;
-    await airtableFetch(`${AIRTABLE_CONFIG.TABLES.GAMES}/${id}`, {
+    const fields = {
+      code: game.code,
+      hostId: game.hostId,
+      guestId: game.guestId || "",
+      hostPos: game.hostPos,
+      guestPos: game.guestPos,
+      turn: game.turn,
+      winner: game.winner || "",
+      lastDice: game.lastDice,
+      hostLastDice: game.hostLastDice || 0,
+      guestLastDice: game.guestLastDice || 0,
+      hostReaction: game.hostReaction || "",
+      guestReaction: game.guestReaction || "",
+      lastUpdated: Date.now()
+    };
+    await airtableFetch(`${AIRTABLE_CONFIG.TABLES.GAMES}/${game.id}`, {
       method: 'PATCH',
-      body: JSON.stringify({ fields: { ...fields, lastUpdated: Date.now() } })
+      body: JSON.stringify({ fields })
     });
   },
 

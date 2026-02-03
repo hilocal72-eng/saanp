@@ -71,6 +71,11 @@
           100% { transform: translateY(120%) rotate(720deg); opacity: 0; }
         }
 
+        @keyframes shine-sweep {
+          0% { transform: translateX(-150%) skewX(-25deg); }
+          20%, 100% { transform: translateX(150%) skewX(-25deg); }
+        }
+
         .animate-spark {
           animation: spark-burst 1.2s cubic-bezier(0, 0.5, 0.2, 1) infinite;
         }
@@ -99,8 +104,34 @@
           animation: confetti-fall linear forwards;
         }
 
+        .shine-effect {
+          position: relative;
+          overflow: hidden;
+        }
+
+        .shine-effect::after {
+          content: "";
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 50%;
+          height: 100%;
+          background: linear-gradient(
+            to right,
+            rgba(255, 255, 255, 0) 0%,
+            rgba(255, 255, 255, 0.6) 50%,
+            rgba(255, 255, 255, 0) 100%
+          );
+          animation: shine-sweep 4s infinite linear;
+          pointer-events: none;
+        }
+
         .text-glow-yellow {
           text-shadow: 0 0 20px rgba(251, 191, 36, 0.6), 0 0 40px rgba(251, 191, 36, 0.4), 0 4px 0 rgba(0,0,0,0.8);
+        }
+
+        .gold-drop-shadow {
+          filter: drop-shadow(0 0 12px rgba(251, 191, 36, 0.4));
         }
 
         @supports (padding: env(safe-area-inset-bottom)) {
