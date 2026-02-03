@@ -24,15 +24,10 @@
           -webkit-font-smoothing: antialiased;
           -moz-osx-font-smoothing: grayscale;
           overscroll-behavior-y: contain;
-          background-color: #020617; /* Matches slate-950 */
+          background-color: #020617;
         }
         
         .font-righteous { font-family: 'Righteous', cursive; }
-
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
 
         .glass {
           background: rgba(15, 23, 42, 0.8);
@@ -40,34 +35,28 @@
           -webkit-backdrop-filter: blur(12px);
         }
 
-        @keyframes pulse-soft {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.8; transform: scale(0.98); }
-        }
-        .animate-pulse-soft {
-          animation: pulse-soft 2s infinite ease-in-out;
-        }
-
-        /* Realistic Dice Physics Animations */
-        @keyframes dice-tumble {
-          0% { transform: scale(1) rotate(0deg) translate(0, 0); }
-          20% { transform: scale(1.1) rotate(45deg) translate(2px, -4px); }
-          40% { transform: scale(0.9) rotate(-30deg) translate(-3px, 2px); }
-          60% { transform: scale(1.1) rotate(15deg) translate(3px, -2px); }
-          80% { transform: scale(0.95) rotate(-10deg) translate(-1px, 1px); }
-          100% { transform: scale(1) rotate(0deg) translate(0, 0); }
+        @keyframes spark-burst {
+          0% { 
+            transform: translate(0, 0) scale(1); 
+            opacity: 1; 
+          }
+          20% { opacity: 1; }
+          100% { 
+            transform: translate(var(--dx), var(--dy)) scale(0); 
+            opacity: 0; 
+          }
         }
 
-        @keyframes dice-settle {
-          0% { transform: scale(1.4); filter: brightness(1.5); }
-          40% { transform: scale(0.85); filter: brightness(1.2); }
-          70% { transform: scale(1.1); filter: brightness(1); }
-          100% { transform: scale(1); filter: brightness(1); }
+        @keyframes flash-burst {
+          0% { transform: scale(0); opacity: 0; }
+          10% { transform: scale(1.5); opacity: 1; }
+          100% { transform: scale(2.5); opacity: 0; }
         }
 
-        @keyframes shimmer {
-          0% { background-position: -200% center; }
-          100% { background-position: 200% center; }
+        @keyframes winner-zoom-pulse {
+          0% { transform: scale(0.85); filter: brightness(1); }
+          50% { transform: scale(1.1); filter: brightness(1.2); }
+          100% { transform: scale(0.85); filter: brightness(1); }
         }
 
         @keyframes reaction-pop-fade {
@@ -77,13 +66,25 @@
           100% { transform: scale(2.2) rotate(0deg); opacity: 0; }
         }
 
-        .animate-reaction-pop {
-          animation: reaction-pop-fade 1.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        @keyframes confetti-fall {
+          0% { transform: translateY(-20%) rotate(0deg); opacity: 1; }
+          100% { transform: translateY(120%) rotate(720deg); opacity: 0; }
         }
 
-        .animate-shimmer {
-          background-size: 200% auto;
-          animation: shimmer 3s linear infinite;
+        .animate-spark {
+          animation: spark-burst 1.2s cubic-bezier(0, 0.5, 0.2, 1) infinite;
+        }
+
+        .animate-flash {
+          animation: flash-burst 1.2s ease-out infinite;
+        }
+
+        .animate-winner-zoom {
+          animation: winner-zoom-pulse 3s ease-in-out infinite;
+        }
+
+        .animate-reaction-pop {
+          animation: reaction-pop-fade 1.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
 
         .animate-dice-tumble {
@@ -94,7 +95,14 @@
           animation: dice-settle 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
 
-        /* Fix for iOS bottom bar padding in standalone mode */
+        .animate-confetti-fall {
+          animation: confetti-fall linear forwards;
+        }
+
+        .text-glow-yellow {
+          text-shadow: 0 0 20px rgba(251, 191, 36, 0.6), 0 0 40px rgba(251, 191, 36, 0.4), 0 4px 0 rgba(0,0,0,0.8);
+        }
+
         @supports (padding: env(safe-area-inset-bottom)) {
           nav {
             padding-bottom: calc(0.5rem + env(safe-area-inset-bottom)) !important;
@@ -105,6 +113,7 @@
 {
   "imports": {
     "react": "https://esm.sh/react@^19.2.4",
+    "react-dom": "https://esm.sh/react-dom@^19.2.4",
     "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
     "react/": "https://esm.sh/react@^19.2.4/",
     "lucide-react": "https://esm.sh/lucide-react@^0.563.0"
@@ -115,6 +124,7 @@
 </head>
 <body class="bg-slate-950 text-slate-100 overflow-x-hidden selection:bg-indigo-500/30">
     <div id="root"></div>
+    <div id="portal-root"></div>
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
