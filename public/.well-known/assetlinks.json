@@ -2,7 +2,7 @@
       "relation": ["delegate_permission/common.handle_all_urls"],
       "target": {
         "namespace": "android_app",
-        "package_name": "dev.pages.saanp.twa",
-        "sha256_cert_fingerprints": ["7E:35:D8:A9:34:1D:45:14:58:1F:8B:20:92:89:26:7E:16:23:41:8C:6A:16:4A:FE:85:F9:DC:09:C9:2C:EC:66"]
+        "package_name": "dev.pages.snake_70r.twa",
+        "sha256_cert_fingerprints": ["96:9B:C2:A1:19:42:F4:C3:41:B3:54:83:CA:D8:DF:5B:55:AA:0E:3A:D2:C8:4F:C7:12:DC:CF:31:A0:93:F1:5B"]
       }
     }]
