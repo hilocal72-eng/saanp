@@ -3,6 +3,6 @@
       "target": {
         "namespace": "android_app",
         "package_name": "dev.pages.saanp.twa",
-        "sha256_cert_fingerprints": ["69:CB:39:5C:F9:D0:E6:91:01:71:A1:FD:E6:C6:70:D1:00:EA:49:9B:B2:84:D5:A1:CB:B6:99:0E:9D:54:2D:56"]
+        "sha256_cert_fingerprints": ["8A:5A:0F:53:06:66:A6:18:B7:96:EC:67:61:C8:55:9C:2D:CF:9E:83:04:8F:E1:68:F7:AA:C8:6B:C2:EB:79:1E"]
       }
     }]
