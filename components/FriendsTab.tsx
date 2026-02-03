@@ -234,7 +234,7 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
                     onClick={() => { setShowStatsModal(false); setViewingFriendStats(null); }}
                     className="mt-8 w-full bg-white text-black font-black py-4 rounded-xl shadow-xl active:scale-95 transition-all text-[10px] tracking-widest uppercase"
                   >
-                    CLOSE RECORD
+                    CLOSE
                   </button>
                 </div>
               ) : (

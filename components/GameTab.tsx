@@ -17,6 +17,7 @@ interface GameTabProps {
 const TURN_TIMEOUT_SECONDS = 60;
 const ECHO_DURATION = 4000;
 const SYNC_INTERVAL = 1500;
+const WALK_SPEED_MS = 200; // Time per step during walk animation
 
 const REACTIONS = [
   { icon: '😂', label: 'LOL', color: '#fbbf24' },
@@ -24,7 +25,7 @@ const REACTIONS = [
   { icon: '🤬', label: 'RAGE', color: '#f87171' },
   { icon: '🐍', label: 'BIG SNAKE!', color: '#4ade80' },
   { icon: '😎', label: 'COOL', color: '#0ea5e9' },
-  { icon: '🫡', label: 'GG', color: '#94a3b8' }
+  { icon: '❤️', label: 'LOVE', color: '#f43f5e' }
 ];
 
 const formatTime = (seconds: number) => {
@@ -154,9 +155,6 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
   // Sync board positions and check for reactions in the game object directly
   useEffect(() => {
     if (game) {
-      setVisualHostPos(game.hostPos);
-      setVisualGuestPos(game.guestPos);
-
       const checkReaction = (reactionStr: string | undefined, setter: (val: any) => void) => {
         if (!reactionStr) return;
         const [text, timeStr] = reactionStr.split('|');
@@ -169,7 +167,67 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
       checkReaction(game.hostReaction, setHostEcho);
       checkReaction(game.guestReaction, setGuestEcho);
     }
-  }, [game?.id, game?.hostPos, game?.guestPos, game?.hostReaction, game?.guestReaction]);
+  }, [game?.id, game?.hostReaction, game?.guestReaction]);
+
+  // Step-by-step movement animation loop
+  useEffect(() => {
+    if (!game) return;
+
+    const hostDone = visualHostPos === game.hostPos;
+    const guestDone = visualGuestPos === game.guestPos;
+
+    if (hostDone && guestDone) {
+      setIsAnimating(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setIsAnimating(true);
+
+      const calculateNextPos = (current: number, target: number) => {
+        if (current === target) return target;
+
+        // Sequence logic:
+        // 1. Check if we are currently at a ladder bottom that leads to the final target
+        if (LADDERS[current] === target) return target;
+        
+        // 2. Check if we are currently at a snake head that leads to the final target
+        if (SNAKES[current] === target) return target;
+
+        // 3. Determine if this move involved a ladder ahead
+        const ladderBottom = Object.keys(LADDERS).find(k => LADDERS[Number(k)] === target && Number(k) > current);
+        if (ladderBottom) {
+          const bottom = Number(ladderBottom);
+          // Walk forward to the ladder bottom first
+          if (current < bottom) return current + 1;
+          // We are at the bottom, next step is the jump (climb)
+          return target;
+        }
+
+        // 4. Determine if this move involved a snake (target is behind current)
+        if (target < current) {
+           const snakeHead = Object.keys(SNAKES).find(k => SNAKES[Number(k)] === target);
+           if (snakeHead) {
+             const head = Number(snakeHead);
+             // If we haven't reached the head yet, walk forward
+             if (current < head) return current + 1;
+             // At the head, slide down to tail
+             return target;
+           }
+        }
+
+        // 5. Default: Just walk forward towards target
+        if (current < target) return current + 1;
+        
+        return target;
+      };
+
+      if (!hostDone) setVisualHostPos(prev => calculateNextPos(prev, game.hostPos));
+      if (!guestDone) setVisualGuestPos(prev => calculateNextPos(prev, game.guestPos));
+    }, WALK_SPEED_MS);
+
+    return () => clearTimeout(timer);
+  }, [game?.hostPos, game?.guestPos, visualHostPos, visualGuestPos]);
 
   // Reaction cleanup
   useEffect(() => {
@@ -186,6 +244,7 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
     (game.turn === 'guest' && game.guestId === myProfile.uniqueId)
   ));
 
+  // Fix: onProfileUpdate was calling undefined 'player'. Changed to 'updated'.
   const syncMyStatsLocally = useCallback(async (iWon: boolean, gameId: string) => {
     if (statsUpdatedForGame === gameId || !myProfile) return;
     setStatsUpdatedForGame(gameId);
@@ -219,27 +278,6 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
     }, 1000);
     return () => clearInterval(timer);
   }, [game?.turn, game?.lastUpdated, game?.winner, game?.guestId, myProfile?.uniqueId, setGame, syncMyStatsLocally]);
-
-  useEffect(() => {
-    if (!game) return;
-    const hostDone = visualHostPos === game.hostPos;
-    const guestDone = visualGuestPos === game.guestPos;
-    if (hostDone && guestDone) { setIsAnimating(false); return; }
-    const timer = setTimeout(() => {
-      setIsAnimating(true);
-      const calculateNextPos = (current: number, target: number) => {
-        if (SNAKES[current] === target || LADDERS[current] === target) return target;
-        const head = Object.keys(SNAKES).map(Number).find(k => SNAKES[k] === target) || Object.keys(LADDERS).map(Number).find(k => LADDERS[k] === target);
-        const walkTarget = head || target;
-        if (current < walkTarget) return current + 1;
-        if (current > walkTarget) return target;
-        return current;
-      };
-      if (!hostDone) setVisualHostPos(prev => calculateNextPos(prev, game.hostPos));
-      if (!guestDone) setVisualGuestPos(prev => calculateNextPos(prev, game.guestPos));
-    }, 220);
-    return () => clearTimeout(timer);
-  }, [game?.hostPos, game?.guestPos, visualHostPos, visualGuestPos]);
 
   useEffect(() => {
     let interval: any;
