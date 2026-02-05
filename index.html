@@ -76,6 +76,20 @@
           20%, 100% { transform: translateX(150%) skewX(-25deg); }
         }
 
+        @keyframes dice-tumble {
+          0% { transform: rotate(0deg) scale(1); }
+          25% { transform: rotate(90deg) scale(1.1) translateY(-10px); }
+          50% { transform: rotate(180deg) scale(1) translateY(0); }
+          75% { transform: rotate(270deg) scale(1.1) translateY(-10px); }
+          100% { transform: rotate(360deg) scale(1) translateY(0); }
+        }
+
+        @keyframes dice-settle {
+          0% { transform: scale(1.3) rotate(15deg); }
+          50% { transform: scale(0.9) rotate(-5deg); }
+          100% { transform: scale(1) rotate(0deg); }
+        }
+
         .animate-spark {
           animation: spark-burst 1.2s cubic-bezier(0, 0.5, 0.2, 1) infinite;
         }
@@ -93,7 +107,7 @@
         }
 
         .animate-dice-tumble {
-          animation: dice-tumble 0.15s infinite linear;
+          animation: dice-tumble 0.2s infinite linear;
         }
 
         .animate-dice-settle {

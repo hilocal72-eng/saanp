@@ -16,8 +16,8 @@ interface GameTabProps {
 const TURN_TIMEOUT_SECONDS = 60;
 const ECHO_DURATION = 4000;
 const SYNC_INTERVAL = 1500;
-const WALK_SPEED_MS = 250;
-const SLIDE_SPEED_MS = 600;
+const WALK_SPEED_MS = 300; // Slower for visibility
+const SLIDE_SPEED_MS = 800; // Slower slide
 
 const REACTIONS = [
   { icon: '😂', label: 'LOL' },
@@ -158,26 +158,40 @@ const ReactionBubble: React.FC<{ text: string, visible: boolean }> = ({ text, vi
   );
 };
 
-const Pawn = ({ color, className, isBitten }: { color: string, className?: string, isBitten?: boolean }) => (
-  <svg viewBox="0 0 40 60" className={`w-full h-full drop-shadow-[0_4px_4px_rgba(0,0,0,0.4)] transition-transform duration-300 ${isBitten ? 'animate-bounce scale-110' : ''} ${className}`} style={{ color }}>
+const Pawn = ({ color, className, isBitten, isHopping }: { color: string, className?: string, isBitten?: boolean, isHopping?: boolean }) => (
+  <svg viewBox="0 0 40 60" className={`w-full h-full drop-shadow-[0_4px_4px_rgba(0,0,0,0.4)] transition-all duration-300 ${isBitten ? 'animate-bounce scale-110' : ''} ${isHopping ? '-translate-y-4' : 'translate-y-0'} ${className}`} style={{ color }}>
     <circle cx="20" cy="15" r="10" fill="currentColor" stroke="black" strokeWidth="3" />
     <path d="M20 25 C14 25 10 28 10 32 L6 50 C6 54 10 56 14 56 L26 56 C30 56 34 54 34 50 L30 32 C30 28 26 25 20 25 Z" fill="currentColor" stroke="black" strokeWidth="3" strokeLinejoin="round" />
   </svg>
 );
 
 const IsometricDie = ({ value, rolling }: { value: number, rolling: boolean }) => (
-  <svg viewBox="0 0 100 100" className={`w-full h-full transition-all duration-150 ${rolling ? 'animate-dice-tumble scale-110' : 'animate-dice-settle'}`}>
+  <svg viewBox="0 0 100 100" className={`w-full h-full transition-all duration-150 drop-shadow-[0_8px_15px_rgba(0,0,0,0.4)] ${rolling ? 'animate-dice-tumble scale-110' : 'animate-dice-settle'}`}>
+    <defs>
+      <linearGradient id="die-top" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stopColor="#ff5f5f" />
+        <stop offset="100%" stopColor="#ef4444" />
+      </linearGradient>
+      <linearGradient id="die-side-1" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor="#dc2626" />
+        <stop offset="100%" stopColor="#991b1b" />
+      </linearGradient>
+      <linearGradient id="die-side-2" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor="#b91c1c" />
+        <stop offset="100%" stopColor="#7f1d1d" />
+      </linearGradient>
+    </defs>
     <g transform="translate(25, 20)">
-      <path d="M25 0 L50 15 L25 30 L0 15 Z" fill="#ffdf5e" stroke="black" strokeWidth="2.5" />
-      <path d="M0 15 L25 30 L25 60 L0 45 Z" fill="#ffce00" stroke="black" strokeWidth="2.5" />
-      <path d="M25 30 L50 15 L50 45 L25 60 Z" fill="#ffe98a" stroke="black" strokeWidth="2.5" />
-      <g>
-         {value === 1 && <circle cx="25" cy="15" r="4" fill="#ff9100" />}
-         {value === 2 && (<><circle cx="15" cy="10" r="3" fill="black" /><circle cx="35" cy="20" r="3" fill="black" /></>)}
-         {value === 3 && (<><circle cx="15" cy="10" r="3" fill="black" /><circle cx="25" cy="15" r="3" fill="black" /><circle cx="35" cy="20" r="3" fill="black" /></>)}
-         {value === 4 && (<><circle cx="15" cy="10" r="3" fill="black" /><circle cx="35" cy="10" r="3" fill="black" /><circle cx="15" cy="20" r="3" fill="black" /><circle cx="35" cy="20" r="3" fill="black" /></>)}
-         {value === 5 && (<><circle cx="15" cy="10" r="3" fill="black" /><circle cx="35" cy="10" r="3" fill="black" /><circle cx="25" cy="15" r="3" fill="black" /><circle cx="15" cy="20" r="3" fill="black" /><circle cx="35" cy="20" r="3" fill="black" /></>)}
-         {value === 6 && (<><circle cx="15" cy="8" r="2.5" fill="black" /><circle cx="25" cy="8" r="2.5" fill="black" /><circle cx="35" cy="8" r="2.5" fill="black" /><circle cx="15" cy="22" r="2.5" fill="black" /><circle cx="25" cy="22" r="2.5" fill="black" /><circle cx="35" cy="22" r="2.5" fill="black" /></>)}
+      <path d="M25 0 L50 15 L25 30 L0 15 Z" fill="url(#die-top)" stroke="#7f1d1d" strokeWidth="1.5" />
+      <path d="M0 15 L25 30 L25 60 L0 45 Z" fill="url(#die-side-1)" stroke="#7f1d1d" strokeWidth="1.5" />
+      <path d="M25 30 L50 15 L50 45 L25 60 Z" fill="url(#die-side-2)" stroke="#7f1d1d" strokeWidth="1.5" />
+      <g className="drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">
+         {value === 1 && <circle cx="25" cy="15" r="4.5" fill="white" />}
+         {value === 2 && (<><circle cx="15" cy="10" r="3.5" fill="white" /><circle cx="35" cy="20" r="3.5" fill="white" /></>)}
+         {value === 3 && (<><circle cx="15" cy="10" r="3.5" fill="white" /><circle cx="25" cy="15" r="3.5" fill="white" /><circle cx="35" cy="20" r="3.5" fill="white" /></>)}
+         {value === 4 && (<><circle cx="15" cy="10" r="3.5" fill="white" /><circle cx="35" cy="10" r="3.5" fill="white" /><circle cx="15" cy="20" r="3.5" fill="white" /><circle cx="35" cy="20" r="3.5" fill="white" /></>)}
+         {value === 5 && (<><circle cx="15" cy="10" r="3.5" fill="white" /><circle cx="35" cy="10" r="3.5" fill="white" /><circle cx="25" cy="15" r="3.5" fill="white" /><circle cx="15" cy="20" r="3.5" fill="white" /><circle cx="35" cy="20" r="3.5" fill="white" /></>)}
+         {value === 6 && (<><circle cx="15" cy="8" r="3" fill="white" /><circle cx="25" cy="8" r="3" fill="white" /><circle cx="35" cy="8" r="3" fill="white" /><circle cx="15" cy="22" r="3" fill="white" /><circle cx="25" cy="22" r="3" fill="white" /><circle cx="35" cy="22" r="3" fill="white" /></>)}
       </g>
     </g>
   </svg>
@@ -188,10 +202,15 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
   const [rolling, setRolling] = useState(false);
   const [rollingDiceValue, setRollingDiceValue] = useState<number>(1);
   const [loading, setLoading] = useState(false);
+  
+  // Track visual positions separately to animate them
   const [visualHostPos, setVisualHostPos] = useState(game?.hostPos || 1);
   const [visualGuestPos, setVisualGuestPos] = useState(game?.guestPos || 1);
+  
   const [isAnimating, setIsAnimating] = useState(false);
-  const [isSnakeBite, setIsSnakeBite] = useState<'host' | 'guest' | null>(null);
+  const [isHopping, setIsHopping] = useState<'host' | 'guest' | null>(null);
+  const [isSpecialMove, setIsSpecialMove] = useState<'host' | 'guest' | null>(null); // For snakes/ladders
+  
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error', message: string } | null>(null);
   const [timeLeft, setTimeLeft] = useState(TURN_TIMEOUT_SECONDS);
   
@@ -200,6 +219,14 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
   const gameRef = useRef<GameState | null>(game);
 
   useEffect(() => { gameRef.current = game; }, [game]);
+
+  // Sync visual positions on first load or if game is reset
+  useEffect(() => {
+    if (game && !isAnimating) {
+       setVisualHostPos(game.hostPos);
+       setVisualGuestPos(game.guestPos);
+    }
+  }, [game?.id]);
 
   useEffect(() => {
     if (feedback) {
@@ -236,7 +263,7 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
     if (game && !game.winner && game.guestId) {
       setTurnStartTime(Date.now());
     }
-  }, [game?.turn, game?.id, game?.guestId]); // Added game.guestId to dependencies to fix lobby timer issue
+  }, [game?.turn, game?.id, game?.guestId]);
 
   // Handle Turn Expiry (Game Over on Time Out)
   useEffect(() => {
@@ -260,48 +287,56 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
     handleTimeout();
   }, [timeLeft, game?.winner]);
 
+  // Bot Turn Logic
   useEffect(() => {
+    // Standardized check for bot name "CHIP"
     if (game && game.isBotGame && game.guestId === "CHIP" && game.turn === "guest" && !game.winner && !rolling && !isAnimating) {
       const timer = setTimeout(() => rollDice(), 1500);
       return () => clearTimeout(timer);
     }
-  }, [game?.turn, game?.isBotGame, game?.winner, rolling, isAnimating]);
+  }, [game?.turn, game?.isBotGame, game?.winner, rolling, isAnimating, game?.guestId]);
 
+  // --- REFINED MOVEMENT EFFECT ---
   useEffect(() => {
     if (!game) return;
     
-    const hostDone = visualHostPos === game.hostPos;
-    const guestDone = visualGuestPos === game.guestPos;
-    if (hostDone && guestDone) { 
-      setIsAnimating(false); 
-      setIsSnakeBite(null);
-      return; 
-    }
+    const movePawn = (current: number, target: number, player: 'host' | 'guest', setter: React.Dispatch<React.SetStateAction<number>>) => {
+      if (current === target) return;
 
-    const timer = setTimeout(() => {
       setIsAnimating(true);
-      
-      const calculateNext = (curr: number, target: number, player: 'host' | 'guest') => {
-        if (curr === target) return target;
-        
-        const snakeEnd = SNAKES[curr];
-        const ladderEnd = LADDERS[curr];
-        
-        if (snakeEnd === target || ladderEnd === target) {
-          if (snakeEnd === target) setIsSnakeBite(player);
-          return target;
-        }
-        
-        if (curr < target) return curr + 1;
-        return target;
-      };
 
-      if (!hostDone) setVisualHostPos(p => calculateNext(p, game.hostPos, 'host'));
-      if (!guestDone) setVisualGuestPos(p => calculateNext(p, game.guestPos, 'guest'));
-    }, isSnakeBite ? SLIDE_SPEED_MS : WALK_SPEED_MS);
-    
-    return () => clearTimeout(timer);
-  }, [game?.hostPos, game?.guestPos, visualHostPos, visualGuestPos, isSnakeBite]);
+      // Check for special landing spots (Snake head or Ladder foot)
+      const snakeEnd = SNAKES[current];
+      const ladderEnd = LADDERS[current];
+
+      // If we are EXACTLY at the start of a snake/ladder AND that snake/ladder leads to our FINAL target
+      // This ensures we only take the slide/climb AFTER walking to it step-by-step
+      if ((snakeEnd === target || ladderEnd === target)) {
+        setIsSpecialMove(player);
+        setTimeout(() => {
+           setter(target);
+           setIsSpecialMove(null);
+        }, SLIDE_SPEED_MS);
+        return;
+      }
+
+      // Normal step-by-step walk
+      setIsHopping(player);
+      setTimeout(() => {
+        setIsHopping(null);
+        // Step forward incrementally
+        setter(prev => prev + 1);
+      }, WALK_SPEED_MS);
+    };
+
+    if (visualHostPos !== game.hostPos) {
+      movePawn(visualHostPos, game.hostPos, 'host', setVisualHostPos);
+    } else if (visualGuestPos !== game.guestPos) {
+      movePawn(visualGuestPos, game.guestPos, 'guest', setVisualGuestPos);
+    } else {
+      setIsAnimating(false);
+    }
+  }, [game?.hostPos, game?.guestPos, visualHostPos, visualGuestPos]);
 
   useEffect(() => {
     let interval: any;
@@ -364,17 +399,27 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
     if (!currentG || rolling || isAnimating || currentG.winner || !myProfile) return;
     setRolling(true);
     const diceValue = Math.floor(Math.random() * 6) + 1;
-    for (let i = 0; i < 10; i++) {
+    
+    // Smooth tumble animation with 16 frames
+    const frames = 16;
+    for (let i = 0; i < frames; i++) {
       setRollingDiceValue(Math.floor(Math.random() * 6) + 1);
-      await new Promise(r => setTimeout(r, 60));
+      // Accelerate then decelerate slightly
+      const delay = i < frames / 2 ? 60 : 60 + (i - frames / 2) * 15;
+      await new Promise(r => setTimeout(r, delay));
     }
+    
     setRollingDiceValue(diceValue);
+    
     const isHostTurn = currentG.turn === 'host';
     const currentPos = isHostTurn ? currentG.hostPos : currentG.guestPos;
+    
     let landing = currentPos + diceValue;
     if (landing > BOARD_CELLS) landing = currentPos;
+    
     const finalPos = LADDERS[landing] || SNAKES[landing] || landing;
     const winnerId = finalPos === BOARD_CELLS ? (isHostTurn ? currentG.hostId : currentG.guestId!) : undefined;
+    
     const timestamp = Date.now();
     const update: GameState = { 
       ...currentG, 
@@ -387,10 +432,15 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
       winner: winnerId, 
       lastUpdated: timestamp
     };
+    
     setGame(update);
     if (!currentG.isBotGame) await dbService.updateGame(update);
     if (winnerId && myProfile) await dbService.incrementStats(myProfile.uniqueId, winnerId === myProfile.uniqueId);
-    setRolling(false);
+    
+    // Keep the "rolling" state active for a split second after setting final value for settle animation
+    setTimeout(() => {
+      setRolling(false);
+    }, 450);
   };
 
   const getCellCoords = (cell: number) => {
@@ -614,8 +664,12 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
           </svg>
 
           <div className="absolute inset-0 z-[60] pointer-events-none">
-            <div className="absolute w-8 h-8 transition-all duration-200 ease-out" style={{ left: `${sameCell ? hostCoords.x - 2.5 : hostCoords.x}%`, top: `${hostCoords.y}%`, transform: 'translate(-50%, -85%)' }}><Pawn color="#4f46e5" isBitten={isSnakeBite === 'host'} /></div>
-            <div className="absolute w-8 h-8 transition-all duration-200 ease-out" style={{ left: `${sameCell ? guestCoords.x + 2.5 : guestCoords.x}%`, top: `${guestCoords.y}%`, transform: 'translate(-50%, -85%)' }}><Pawn color="#10b981" isBitten={isSnakeBite === 'guest'} /></div>
+            <div className="absolute w-8 h-8 transition-all duration-300 ease-out" style={{ left: `${sameCell ? hostCoords.x - 2.5 : hostCoords.x}%`, top: `${hostCoords.y}%`, transform: 'translate(-50%, -85%)' }}>
+               <Pawn color="#4f46e5" isBitten={isSpecialMove === 'host' && SNAKES[visualHostPos] !== undefined} isHopping={isHopping === 'host'} />
+            </div>
+            <div className="absolute w-8 h-8 transition-all duration-300 ease-out" style={{ left: `${sameCell ? guestCoords.x + 2.5 : guestCoords.x}%`, top: `${guestCoords.y}%`, transform: 'translate(-50%, -85%)' }}>
+               <Pawn color="#10b981" isBitten={isSpecialMove === 'guest' && SNAKES[visualGuestPos] !== undefined} isHopping={isHopping === 'guest'} />
+            </div>
           </div>
         </div>
       </div>
