@@ -7,10 +7,12 @@ export interface UserProfile {
   name: string;
   pin: string;
   gender: Gender;
-  avatarUrl?: string; // Base64 encoded compressed image
-  lastSeen?: number; // Timestamp
+  avatarUrl?: string;
+  lastSeen?: number;
   wins?: number;
   losses?: number;
+  coins?: number;
+  ownedStickers?: string[];
 }
 
 export interface Friend {
@@ -43,9 +45,10 @@ export interface GameState {
   lastDice: number;
   hostLastDice?: number;
   guestLastDice?: number;
-  hostReaction?: string; // e.g., "🤣|timestamp"
-  guestReaction?: string; // e.g., "🐍|timestamp"
+  hostReaction?: string;
+  guestReaction?: string;
   lastUpdated?: number;
+  isBotGame?: boolean; // NEW: Distinguishes AI matches
 }
 
 export enum Tab {

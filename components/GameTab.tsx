@@ -4,7 +4,7 @@ import { GameState, UserProfile } from '../types';
 import { dbService } from '../services/dbService';
 import { LADDERS, SNAKES, BOARD_CELLS } from '../constants';
 import { 
-  Trophy, Sword, Frown, Star, Clock, Sparkles, Smile, Flame, LogOut, AlertCircle, CheckCircle2, User
+  Trophy, Sword, Clock, Sparkles, LogOut, User, Bot, Hash, ArrowRight, Play, Zap
 } from 'lucide-react';
 
 interface GameTabProps {
@@ -20,13 +20,15 @@ const SYNC_INTERVAL = 1500;
 const WALK_SPEED_MS = 200;
 
 const REACTIONS = [
-  { icon: '😂', label: 'LOL', color: '#fbbf24' },
-  { icon: '😭', label: 'NOOO', color: '#60a5fa' },
-  { icon: '🤬', label: 'RAGE', color: '#f87171' },
-  { icon: '🐍', label: 'BIG SNAKE!', color: '#4ade80' },
-  { icon: '😎', label: 'COOL', color: '#0ea5e9' },
-  { icon: '❤️', label: 'LOVE', color: '#f43f5e' }
+  { icon: '😂', label: 'LOL' },
+  { icon: '😭', label: 'NOOO' },
+  { icon: '🤬', label: 'RAGE' },
+  { icon: '🐍', label: 'SNAKE!' },
+  { icon: '😎', label: 'COOL' },
+  { icon: '❤️', label: 'LOVE' }
 ];
+
+const SNAKE_COLORS = ['#22c55e', '#ef4444', '#a855f7', '#3b82f6', '#f59e0b'];
 
 const formatTime = (seconds: number) => {
   const mins = Math.floor(seconds / 60);
@@ -83,30 +85,6 @@ const GoldenTrophy = ({ size = 64, className = "", isMuted = false }: { size?: n
   </div>
 );
 
-const SadFaceIcon = ({ size = 60 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 100 100" className="drop-shadow-[0_15px_30px_rgba(0,0,0,0.5)]">
-    <defs>
-      <linearGradient id="sad-face-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" stopColor="#e5e7eb" />
-        <stop offset="100%" stopColor="#9ca3af" />
-      </linearGradient>
-    </defs>
-    {/* Body */}
-    <circle cx="50" cy="50" r="48" fill="url(#sad-face-gradient)" />
-    {/* Eyes */}
-    <circle cx="32" cy="45" r="7" fill="#4b5563" />
-    <circle cx="68" cy="45" r="7" fill="#4b5563" />
-    {/* Sad Mouth */}
-    <path 
-      d="M 28 80 Q 50 55 72 80" 
-      fill="none" 
-      stroke="#4b5563" 
-      strokeWidth="11" 
-      strokeLinecap="round" 
-    />
-  </svg>
-);
-
 const WinnerBannerDisplay = ({ isMe = true }: { isMe?: boolean }) => {
   const isMuted = !isMe;
   const color = isMuted ? "#475569" : "#BF953F";
@@ -124,137 +102,49 @@ const WinnerBannerDisplay = ({ isMe = true }: { isMe?: boolean }) => {
           </linearGradient>
           <path id="curve" d="M 40,80 A 60,60 0 0,1 160,80" />
         </defs>
-
-        {/* TOP ICON */}
-        {isMe ? (
-          <path 
-            d="M 100,5 L 103,14 L 112,14 L 105,20 L 108,29 L 100,23 L 92,29 L 95,20 L 88,14 L 97,14 Z" 
-            fill="url(#banner-gold)" 
-            className="animate-pulse"
-          />
-        ) : (
-           <text x="100" y="25" textAnchor="middle" fill="url(#banner-gold)" fontSize="14" fontWeight="900" className="opacity-40">✕</text>
-        )}
-
-        {/* CURVED TEXT */}
+        <path d="M 100,5 L 103,14 L 112,14 L 105,20 L 108,29 L 100,23 L 92,29 L 95,20 L 88,14 L 97,14 Z" fill="url(#banner-gold)" className="animate-pulse" />
         <text fill="url(#banner-gold)" fontSize="10" fontWeight="900" className="uppercase tracking-tighter">
           <textPath href="#curve" startOffset="50%" textAnchor="middle">
             {isMe ? 'CONGRATULATIONS' : 'GAME OVER'}
           </textPath>
         </text>
-
-        {/* LAURELS */}
         <g stroke="url(#banner-gold)" fill="none" strokeWidth="1.5">
           <path d="M 75,130 C 50,120 45,80 65,50" opacity="0.8" />
           <path d="M 125,130 C 150,120 155,80 135,50" opacity="0.8" />
-          {[0, 0.2, 0.4, 0.6, 0.8, 1].map(t => (
-            <React.Fragment key={t}>
-               <circle cx={65 - t*15} cy={50 + t*70} r="2" fill="url(#banner-gold)" />
-               <circle cx={135 + t*15} cy={50 + t*70} r="2" fill="url(#banner-gold)" />
-            </React.Fragment>
-          ))}
         </g>
-
-        {/* RIBBON BACKGROUND FOLDS */}
-        <path d="M 30,155 L 50,140 L 50,170 L 30,175 Z" fill={isMuted ? "#1e293b" : "#805a00"} opacity="0.6" />
-        <path d="M 170,155 L 150,140 L 150,170 L 170,175 Z" fill={isMuted ? "#1e293b" : "#805a00"} opacity="0.6" />
-
-        {/* MAIN RIBBON FRONT */}
-        <path 
-          d="M 40,145 C 70,135 130,135 160,145 L 165,175 C 130,165 70,165 35,175 Z" 
-          fill="url(#banner-gold)" 
-          stroke={isMuted ? "#1e293b" : "#4d3300"}
-          strokeWidth="0.5"
-        />
-
-        {/* RIBBON TEXT: WINNER or Loser */}
-        <text 
-          x="100" 
-          y="160" 
-          textAnchor="middle" 
-          fill={isMuted ? "#f1f5f9" : "#4d3300"} 
-          fontSize={isMe ? "18" : "16"} 
-          fontWeight="900" 
-          className="italic tracking-tighter select-none"
-        >
+        <path d="M 40,145 C 70,135 130,135 160,145 L 165,175 C 130,165 70,165 35,175 Z" fill="url(#banner-gold)" stroke={isMuted ? "#1e293b" : "#4d3300"} strokeWidth="0.5" />
+        <text x="100" y="160" textAnchor="middle" fill={isMuted ? "#f1f5f9" : "#4d3300"} fontSize={isMe ? "18" : "16"} fontWeight="900" className="italic tracking-tighter select-none">
           {isMe ? 'WINNER' : 'Loser'}
         </text>
       </svg>
-      
-      {/* CENTRAL OVERLAY */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[60%] flex items-center justify-center">
-        {isMe ? (
-          <GoldenTrophy size={110} isMuted={false} />
-        ) : (
-          <div className="animate-bounce">
-            <SadFaceIcon size={60} />
-          </div>
-        )}
+        {isMe ? <GoldenTrophy size={110} isMuted={false} /> : <img src="https://cdn-icons-png.flaticon.com/512/1791/1791330.png" className="w-16 h-16 drop-shadow-xl animate-bounce grayscale opacity-50" alt="Sad" />}
       </div>
     </div>
   );
 };
 
-// Internal Board Overlay Component
 const BoardCelebration = ({ winnerName, isMe }: { winnerName: string, isMe: boolean }) => {
   const fireworkColors = ['#ffffff', '#fef08a', '#fbbf24', '#facc15', '#ef4444', '#3b82f6'];
-
   return (
     <div className="absolute inset-0 pointer-events-none z-[120] flex items-center justify-center bg-[#020d1a]/85 backdrop-blur-[1.5px] overflow-hidden rounded-lg">
       {isMe && (
         <div className="absolute inset-0">
           <FirecrackerBlast delay="0s" colorSet={fireworkColors} xOffset="50%" yOffset="50%" />
-          <FirecrackerBlast delay="0.4s" colorSet={fireworkColors} xOffset="25%" yOffset="30%" />
           <FirecrackerBlast delay="0.8s" colorSet={fireworkColors} xOffset="75%" yOffset="40%" />
-          <FirecrackerBlast delay="1.2s" colorSet={fireworkColors} xOffset="40%" yOffset="75%" />
-          <FirecrackerBlast delay="1.6s" colorSet={fireworkColors} xOffset="65%" yOffset="80%" />
         </div>
       )}
-
       <div className="relative flex flex-col items-center px-4 z-20">
         <div className="animate-winner-zoom flex flex-col items-center">
-          
           <WinnerBannerDisplay isMe={isMe} />
-
-          <div className={`mt-2 flex flex-col items-center gap-2 bg-black/80 px-6 py-3 rounded-2xl border border-white/20 backdrop-blur-md shadow-[0_10px_40px_rgba(0,0,0,0.5)]`}>
-            {isMe ? (
-              <div className="flex items-center gap-2">
-                <Trophy size={18} className="text-yellow-400" />
-                <p className="text-white font-black text-xs uppercase tracking-[0.2em]">
-                  Victory!
-                </p>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-1">
-                <p className="text-slate-100 font-black text-xs uppercase tracking-widest text-center italic">
-                   Better Luck next time
-                </p>
-                <p className="text-slate-400 font-bold text-[8px] uppercase tracking-widest text-center mt-1">
-                   {winnerName} conquered the arena
-                </p>
-              </div>
-            )}
+          <div className="mt-2 flex flex-col items-center gap-2 bg-black/80 px-6 py-3 rounded-2xl border border-white/20 backdrop-blur-md shadow-[0_10px_40px_rgba(0,0,0,0.5)]">
+            <div className="flex items-center gap-2">
+              <Trophy size={18} className="text-yellow-400" />
+              <p className="text-white font-black text-xs uppercase tracking-[0.2em]">{isMe ? 'Victory!' : 'Game Over'}</p>
+            </div>
           </div>
         </div>
       </div>
-      
-      {isMe && (
-        <div className="absolute inset-0 overflow-hidden opacity-40">
-          {[...Array(20)].map((_, i) => (
-            <div 
-              key={i}
-              className="absolute w-1 h-1 rounded-full animate-confetti-fall"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: '-5%',
-                backgroundColor: '#ffffff',
-                animationDelay: `${Math.random() * 2}s`,
-                animationDuration: `${3 + Math.random() * 2}s`,
-              }}
-            />
-          ))}
-        </div>
-      )}
     </div>
   );
 };
@@ -263,9 +153,7 @@ const ReactionBubble: React.FC<{ text: string, visible: boolean }> = ({ text, vi
   if (!visible || !text) return null;
   return (
     <div className="absolute inset-0 flex items-center justify-center z-[500] pointer-events-none overflow-visible">
-      <div className="text-3xl animate-reaction-pop drop-shadow-[0_0_15px_rgba(255,255,255,0.8)] select-none">
-        {text}
-      </div>
+      <div className="text-3xl animate-reaction-pop drop-shadow-[0_0_15px_rgba(255,255,255,0.8)] select-none">{text}</div>
     </div>
   );
 };
@@ -314,60 +202,56 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
 
   useEffect(() => { gameRef.current = game; }, [game]);
 
-  // Resolve avatars for host and guest dynamically
+  useEffect(() => {
+    if (feedback) {
+      const timer = setTimeout(() => {
+        setFeedback(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [feedback]);
+
+  useEffect(() => {
+    if (game && game.isBotGame && game.guestId === "CHIP" && game.turn === "guest" && !game.winner && !rolling && !isAnimating) {
+      const timer = setTimeout(async () => {
+        if (Math.random() > 0.7) {
+          const randomReaction = REACTIONS[Math.floor(Math.random() * REACTIONS.length)].icon;
+          const timestamp = Date.now();
+          setGuestEcho({ text: randomReaction, time: timestamp });
+        }
+        await rollDice();
+      }, 1500 + Math.random() * 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [game?.turn, game?.isBotGame, game?.winner, rolling, isAnimating]);
+
   useEffect(() => {
     const hostId = game?.hostId;
     const guestId = game?.guestId;
     if (!hostId) return;
-
     const fetchAvatars = async () => {
       const needed = [];
       if (hostId && !avatars[hostId]) needed.push(hostId);
-      if (guestId && !avatars[guestId]) needed.push(guestId);
-      
+      if (guestId && guestId !== "CHIP" && !avatars[guestId]) needed.push(guestId);
       if (needed.length === 0) return;
-
       const fetched: Record<string, string> = {};
       for (const uid of needed) {
         const profile = await dbService.findPlayerGlobal(uid);
-        if (profile?.avatarUrl) {
-          fetched[uid] = profile.avatarUrl;
-        }
+        if (profile?.avatarUrl) fetched[uid] = profile.avatarUrl;
       }
-
-      if (Object.keys(fetched).length > 0) {
-        setAvatars(prev => ({ ...prev, ...fetched }));
-      }
+      if (Object.keys(fetched).length > 0) setAvatars(prev => ({ ...prev, ...fetched }));
     };
     fetchAvatars();
   }, [game?.hostId, game?.guestId]);
 
   useEffect(() => {
-    if (feedback) {
-      const t = setTimeout(() => setFeedback(null), 3000);
-      return () => clearTimeout(t);
-    }
-  }, [feedback]);
-
-  useEffect(() => {
-    setHostEcho(null);
-    setGuestEcho(null);
-  }, [game?.id]);
-
-  useEffect(() => {
     if (game) {
       const checkReaction = (reactionStr: string | undefined, setter: (val: any) => void) => {
-        if (!reactionStr) {
-          setter(null);
-          return;
-        }
+        if (!reactionStr) { setter(null); return; }
         const [text, timeStr] = reactionStr.split('|');
         const time = parseInt(timeStr);
-        if (Date.now() - time < ECHO_DURATION) {
-          setter({ text, time });
-        } else {
-          setter(null);
-        }
+        if (Date.now() - time < ECHO_DURATION) setter({ text, time });
+        else setter(null);
       };
       checkReaction(game.hostReaction, setHostEcho);
       checkReaction(game.guestReaction, setGuestEcho);
@@ -378,30 +262,13 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
     if (!game) return;
     const hostDone = visualHostPos === game.hostPos;
     const guestDone = visualGuestPos === game.guestPos;
-    if (hostDone && guestDone) {
-      setIsAnimating(false);
-      return;
-    }
+    if (hostDone && guestDone) { setIsAnimating(false); return; }
     const timer = setTimeout(() => {
       setIsAnimating(true);
       const calculateNextPos = (current: number, target: number) => {
         if (current === target) return target;
         if (LADDERS[current] === target) return target;
         if (SNAKES[current] === target) return target;
-        const ladderBottom = Object.keys(LADDERS).find(k => LADDERS[Number(k)] === target && Number(k) > current);
-        if (ladderBottom) {
-          const bottom = Number(ladderBottom);
-          if (current < bottom) return current + 1;
-          return target;
-        }
-        if (target < current) {
-           const snakeHead = Object.keys(SNAKES).find(k => SNAKES[Number(k)] === target);
-           if (snakeHead) {
-             const head = Number(snakeHead);
-             if (current < head) return current + 1;
-             return target;
-           }
-        }
         if (current < target) return current + 1;
         return target;
       };
@@ -429,7 +296,7 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
   }, [myProfile, statsUpdatedForGame, onProfileUpdate]);
 
   useEffect(() => {
-    if (!game || game.winner || !game.guestId) return;
+    if (!game || game.winner || !game.guestId || game.isBotGame) return;
     const timer = setInterval(() => {
       const lastUpdated = game.lastUpdated || Date.now();
       const elapsed = Math.floor((Date.now() - lastUpdated) / 1000);
@@ -439,12 +306,7 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
         clearInterval(timer);
         const opponentId = game.turn === 'host' ? game.guestId! : game.hostId;
         const forfeitGame = { ...game, winner: opponentId };
-        dbService.updateGame(forfeitGame).then(() => {
-           if (gameRef.current?.id === forfeitGame.id) {
-             setGame(forfeitGame);
-             if (myProfile) syncMyStatsLocally(opponentId === myProfile.uniqueId, game.id!);
-           }
-        });
+        dbService.updateGame(forfeitGame).then(() => { if (gameRef.current?.id === forfeitGame.id) { setGame(forfeitGame); if (myProfile) syncMyStatsLocally(opponentId === myProfile.uniqueId, game.id!); } });
       }
     }, 1000);
     return () => clearInterval(timer);
@@ -453,7 +315,7 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
   useEffect(() => {
     let interval: any;
     let isActive = true;
-    if (game && myProfile) {
+    if (game && myProfile && !game.isBotGame) {
       interval = setInterval(async () => {
         try {
           const remoteGame = await dbService.getGameByCode(game.code);
@@ -473,7 +335,7 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
       }, SYNC_INTERVAL);
     }
     return () => { isActive = false; clearInterval(interval); };
-  }, [game?.id, game?.winner, game?.code, myProfile?.uniqueId, statsUpdatedForGame, syncMyStatsLocally, setGame]);
+  }, [game?.id, game?.winner, game?.code, myProfile?.uniqueId, statsUpdatedForGame, syncMyStatsLocally, setGame, game?.isBotGame]);
 
   const sendEcho = async (icon: string) => {
     if (!game || !myProfile || !game.guestId) return;
@@ -483,23 +345,22 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
     if (isHost) setHostEcho({ text: icon, time: timestamp });
     else setGuestEcho({ text: icon, time: timestamp });
     const update = { ...game, [isHost ? 'hostReaction' : 'guestReaction']: reactionString, lastUpdated: Date.now() };
-    await dbService.updateGame(update);
+    if (!game.isBotGame) await dbService.updateGame(update);
     setGame(update);
   };
 
-  const createGame = async () => {
+  const createGame = async (isBot: boolean = false) => {
     if (!myProfile) return;
     setLoading(true);
     try {
       const code = Math.floor(1000 + Math.random() * 9000).toString();
-      const newGame = await dbService.hostGame(myProfile.uniqueId, myProfile.avatarUrl, code);
+      const newGame = await dbService.hostGame(myProfile.uniqueId, myProfile.avatarUrl, code, isBot);
       setGame(newGame);
       setVisualHostPos(1);
       setVisualGuestPos(1);
       setStatsUpdatedForGame(null);
-    } catch (e) { 
-      setFeedback({ type: 'error', message: 'Failed to create room.' });
-    } finally { setLoading(false); }
+    } catch (e) { setFeedback({ type: 'error', message: 'Failed to create room.' }); }
+    finally { setLoading(false); }
   };
 
   const joinGame = async () => {
@@ -513,21 +374,15 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
         setVisualGuestPos(result.game.guestPos);
         setStatsUpdatedForGame(null);
         setInputCode('');
-      } else {
-        setFeedback({ 
-          type: 'error', 
-          message: result.error === 'ROOM_FULL' ? 'Room is full' : 'Invalid Code' 
-        });
-      }
-    } catch (e) { 
-      setFeedback({ type: 'error', message: 'Network error.' });
-    } finally { setLoading(false); }
+      } else { setFeedback({ type: 'error', message: result.error === 'ROOM_FULL' ? 'Room is full' : 'Invalid Code' }); }
+    } catch (e) { setFeedback({ type: 'error', message: 'Network error.' }); }
+    finally { setLoading(false); }
   };
 
   const confirmLeave = async () => {
     if (!game || !myProfile) { setGame(null); return; }
     const isHost = game.hostId === myProfile.uniqueId;
-    if (game.guestId && !game.winner) {
+    if (game.guestId && !game.winner && !game.isBotGame) {
       const winnerId = isHost ? game.guestId : game.hostId;
       const finalGame = { ...game, winner: winnerId };
       await dbService.updateGame(finalGame);
@@ -538,24 +393,44 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
   };
 
   const rollDice = async () => {
-    if (!game || rolling || isAnimating || game.winner || !myProfile || !isMyTurn || !game.guestId) return;
+    const currentG = gameRef.current;
+    if (!currentG || rolling || isAnimating || currentG.winner || !myProfile) return;
+    const isHostTurn = currentG.turn === 'host';
+    const isBotTurn = currentG.isBotGame && !isHostTurn;
+    if (!isBotTurn && !isMyTurn) return;
+
     setRolling(true);
     const diceValue = Math.floor(Math.random() * 6) + 1;
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 10; i++) {
       setRollingDiceValue(Math.floor(Math.random() * 6) + 1);
-      await new Promise(r => setTimeout(r, 80));
+      await new Promise(r => setTimeout(r, 60));
     }
     setRollingDiceValue(diceValue);
-    const isHost = game.hostId === myProfile.uniqueId;
-    const currentPos = isHost ? game.hostPos : game.guestPos;
+    
+    const currentPos = isHostTurn ? currentG.hostPos : currentG.guestPos;
     let landingPos = currentPos + diceValue;
     if (landingPos > BOARD_CELLS) landingPos = currentPos;
     const finalPos = LADDERS[landingPos] || SNAKES[landingPos] || landingPos;
-    const winnerId = finalPos === BOARD_CELLS ? (isHost ? game.hostId : game.guestId!) : undefined;
-    const update = { ...game, hostPos: isHost ? finalPos : game.hostPos, guestPos: !isHost ? finalPos : game.guestPos, lastDice: diceValue, hostLastDice: isHost ? diceValue : (game.hostLastDice || 0), guestLastDice: !isHost ? diceValue : (game.guestLastDice || 0), turn: (game.turn === 'host' ? 'guest' : 'host') as any, winner: winnerId, lastUpdated: Date.now() };
-    await dbService.updateGame(update);
+    const winnerId = finalPos === BOARD_CELLS ? (isHostTurn ? currentG.hostId : currentG.guestId!) : undefined;
+    
+    const update = { 
+      ...currentG, 
+      hostPos: isHostTurn ? finalPos : currentG.hostPos, 
+      guestPos: !isHostTurn ? finalPos : currentG.guestPos, 
+      lastDice: diceValue, 
+      hostLastDice: isHostTurn ? diceValue : (currentG.hostLastDice || 0), 
+      guestLastDice: !isHostTurn ? diceValue : (currentG.guestLastDice || 0), 
+      turn: (currentG.turn === 'host' ? 'guest' : 'host') as any, 
+      winner: winnerId, 
+      lastUpdated: Date.now() 
+    };
+
+    if (!currentG.isBotGame) await dbService.updateGame(update);
     setGame(update);
-    if (winnerId) await syncMyStatsLocally(winnerId === myProfile.uniqueId, game.id!);
+    if (winnerId) {
+      const iWon = winnerId === myProfile.uniqueId;
+      await syncMyStatsLocally(iWon, currentG.id || 'bot-match');
+    }
     setRolling(false);
   };
 
@@ -565,11 +440,6 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
     const x = (row % 2 === 0 ? col : 9 - col) * 10 + 5;
     const y = (9 - row) * 10 + 5;
     return { x, y };
-  };
-
-  const getSnakeColor = (start: number) => {
-    const snakeColors = ["#ef4444", "#a855f7", "#10b981", "#3b82f6", "#f59e0b"];
-    return snakeColors[start % snakeColors.length];
   };
 
   const renderBoard = () => {
@@ -582,7 +452,6 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
         cells.push(
           <div key={cellNum} className="relative flex items-center justify-center border-[0.5px] border-black/10 bg-white" style={{ width: '10%', aspectRatio: '1/1' }}>
             <span className="absolute top-0.5 left-1 text-[9px] sm:text-[11px] font-black text-black select-none leading-none z-[50] pointer-events-none">{cellNum}</span>
-            {cellNum === BOARD_CELLS && <div className="absolute top-1 right-1"><Star size={14} className="text-yellow-400 fill-yellow-400" /></div>}
           </div>
         );
       }
@@ -592,55 +461,133 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
 
   const hostCoords = getCellCoords(visualHostPos);
   const guestCoords = getCellCoords(visualGuestPos);
-  const iWon = game?.winner === myProfile?.uniqueId;
   const sameCell = visualHostPos === visualGuestPos;
 
   if (!game) {
     return (
-      <div className="flex flex-col min-h-[100dvh] bg-slate-950 p-8 animate-in fade-in duration-700 relative overflow-hidden">
-        {feedback && (
-          <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[250] flex items-center gap-3 px-6 py-4 rounded-2xl bg-slate-900 border border-indigo-500/30 shadow-[0_0_30px_rgba(79,70,229,0.3)] animate-in slide-in-from-top-full duration-300">
-            {feedback.type === 'success' ? <CheckCircle2 className="text-emerald-500" size={20} /> : <AlertCircle className="text-rose-500" size={20} />}
-            <span className="text-xs font-black text-white uppercase tracking-widest">{feedback.message}</span>
-          </div>
-        )}
-        <div className="absolute inset-0 z-0 opacity-30 mix-blend-screen" style={{ backgroundImage: `url('https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=2070')`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-        <div className="relative z-10 flex-1 flex flex-col justify-center items-center gap-10">
-          <div className="text-center flex flex-col items-center gap-4">
-            <GoldenTrophy size={80} className="animate-bounce" />
-            <h1 className="text-5xl font-black text-white tracking-tighter uppercase italic text-center">Arena<br/><span className="text-indigo-400">Battle</span></h1>
-          </div>
-          <div className="w-full max-w-[260px] space-y-6 pb-48">
-            <button disabled={loading} onClick={createGame} className="w-full bg-white text-black font-black py-4 rounded-2xl active:scale-95 text-xs uppercase tracking-widest shadow-xl">HOST NEW ROOM</button>
-            <div className="flex flex-col gap-3 relative">
-              <input type="text" maxLength={4} value={inputCode} onChange={(e) => setInputCode(e.target.value.replace(/\D/g, ''))} placeholder="CODE" className="w-full text-center font-black text-xl py-3 rounded-2xl bg-slate-950 border border-slate-700 text-white outline-none focus:border-indigo-500 transition-all placeholder:opacity-60" />
-              <button disabled={loading || inputCode.length < 4} onClick={joinGame} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs uppercase active:scale-95">JOIN ARENA</button>
+      <div className="flex flex-col min-h-[100dvh] bg-slate-950 p-6 sm:p-8 animate-in fade-in duration-700 relative overflow-hidden">
+        {/* Cinematic Background */}
+        <div className="absolute inset-0 z-0 opacity-40 mix-blend-screen saturate-150" style={{ backgroundImage: `url('https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=2070')`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+        <div className="absolute inset-0 z-0 bg-gradient-to-b from-slate-950/20 via-slate-950/80 to-slate-950" />
+        
+        <div className="relative z-10 flex-1 flex flex-col justify-center items-center w-full max-w-sm mx-auto">
+          {/* REFINED ARENA BATTLE HEADER */}
+          <div className="text-center flex flex-col items-center gap-2 mb-20 animate-in zoom-in-95 duration-1000">
+            <div className="relative transform hover:scale-110 transition-transform duration-700 mb-6 flex flex-col items-center">
+              <GoldenTrophy size={80} className="relative z-10" />
+              <div className="absolute inset-0 bg-white blur-3xl opacity-10 animate-pulse" />
+            </div>
+            
+            <div className="relative flex flex-col items-center select-none">
+              <h1 className="text-7xl font-black tracking-[-0.08em] uppercase italic leading-[0.6] font-righteous text-arena-title animate-title-float">
+                ARENA
+              </h1>
+              <div className="mt-2 flex items-center gap-3">
+                <div className="h-px w-10 bg-indigo-500/50" />
+                <h2 className="text-3xl font-black text-indigo-400 tracking-[0.2em] uppercase italic leading-tight font-righteous animate-subtitle-pulse">
+                  BATTLE
+                </h2>
+                <div className="h-px w-10 bg-indigo-500/50" />
+              </div>
             </div>
           </div>
+
+          {/* Zigzag Lobby Buttons */}
+          <div className="w-full flex flex-col gap-10 items-center px-4 mb-24 relative">
+            
+            <div className="relative group">
+              <div className="absolute -inset-4 bg-indigo-500/20 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity rounded-full" />
+              <button disabled={loading} onClick={() => createGame(false)} className="w-[220px] -translate-x-12 bg-slate-900/40 backdrop-blur-3xl border border-indigo-500/30 rounded-full h-16 relative overflow-hidden transition-all hover:scale-105 hover:bg-slate-900/60 active:scale-95 animate-float-x">
+                <div className="flex items-center gap-4 px-6 h-full">
+                  <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white border border-white/20 shadow-[0_0_15px_rgba(79,70,229,0.8)]"><Sword size={18} /></div>
+                  <span className="text-xs font-black text-white uppercase italic tracking-widest drop-shadow-md text-glow-indigo">HOST ARENA</span>
+                </div>
+              </button>
+            </div>
+
+            <div className="relative group">
+              <div className="absolute -inset-4 bg-emerald-500/20 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity rounded-full" />
+              <button disabled={loading} onClick={() => createGame(true)} className="w-[220px] translate-x-12 bg-slate-900/40 backdrop-blur-3xl border border-emerald-500/30 rounded-full h-16 relative overflow-hidden transition-all hover:scale-105 hover:bg-slate-900/60 active:scale-95 animate-float-x-delayed">
+                <div className="flex items-center gap-4 px-6 h-full">
+                  <div className="w-9 h-9 bg-emerald-600 rounded-xl flex items-center justify-center text-white border border-white/20 shadow-[0_0_15px_rgba(16,185,129,0.8)]"><Bot size={18} /></div>
+                  <span className="text-xs font-black text-white uppercase italic tracking-widest drop-shadow-md text-glow-emerald">BATTLE WITH AI</span>
+                </div>
+              </button>
+            </div>
+
+            {/* Code Join Option - Thin Arrow inside box */}
+            <div className={`w-52 -translate-x-12 backdrop-blur-3xl border transition-all duration-500 ${inputCode.length === 4 ? 'bg-amber-600/30 border-amber-500 shadow-[0_0_40px_rgba(245,158,11,0.5)] scale-105' : 'bg-slate-950/60 border-white/10 shadow-2xl'} rounded-full h-14 relative flex items-center px-3 gap-1 ring-1 ring-white/5`}>
+              <div className="flex-1 flex items-center pl-1">
+                <div className={`p-1.5 rounded-lg transition-all duration-300 ${inputCode.length === 4 ? 'bg-amber-500 text-white rotate-12' : 'bg-slate-800 text-slate-500'}`}>
+                   <Hash size={14} />
+                </div>
+                <input 
+                   type="text" 
+                   maxLength={4} 
+                   value={inputCode} 
+                   onChange={(e) => setInputCode(e.target.value.replace(/\D/g, ''))} 
+                   placeholder="CODE" 
+                   className="flex-1 bg-transparent font-black text-xl tracking-[0.3em] text-white outline-none placeholder:text-slate-800 h-8 px-2"
+                />
+              </div>
+
+              {/* THIN ENTER ARROW BUTTON - Inside the box */}
+              <button 
+                disabled={loading || inputCode.length < 4} 
+                onClick={joinGame} 
+                className={`relative w-10 h-10 rounded-full font-black transition-all duration-300 flex items-center justify-center group/join ${inputCode.length === 4 ? 'bg-amber-500 text-white shadow-lg active:scale-90 opacity-100' : 'bg-slate-800/50 text-slate-500 opacity-40 cursor-not-allowed'}`}
+              >
+                <ArrowRight size={18} strokeWidth={1.5} className="relative z-10 transition-transform group-hover/join:translate-x-0.5" />
+              </button>
+            </div>
+
+            {feedback && (
+              <div className="text-center animate-in fade-in slide-in-from-top-2 duration-300">
+                <p className={`text-[10px] font-black uppercase tracking-[0.3em] ${feedback.type === 'error' ? 'text-rose-500' : 'text-emerald-500'}`}>{feedback.message}</p>
+              </div>
+            )}
+          </div>
         </div>
+        
+        <style dangerouslySetInnerHTML={{ __html: `
+          .text-arena-title {
+            color: #ffffff;
+            text-shadow: 
+              0 1px 0 #cccccc, 0 2px 0 #c5c5c5, 0 3px 0 #bbbbbb, 0 4px 0 #b1b1b1, 0 5px 0 #aaaaaa, 0 6px 1px rgba(0,0,0,.1), 
+              0 0 5px rgba(0,0,0,.1), 0 1px 3px rgba(0,0,0,.3), 0 3px 5px rgba(0,0,0,.2), 0 5px 10px rgba(0,0,0,.25), 
+              0 10px 10px rgba(0,0,0,.2), 0 20px 20px rgba(0,0,0,.15);
+          }
+          @keyframes titleFloat {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-10px) rotate(1deg); }
+          }
+          .animate-title-float { animation: titleFloat 6s ease-in-out infinite; }
+          @keyframes float-x {
+            0%, 100% { transform: translate(-48px, 0px); }
+            50% { transform: translate(-48px, -8px); }
+          }
+          @keyframes float-x-delayed {
+            0%, 100% { transform: translate(48px, 0px); }
+            50% { transform: translate(48px, -8px); }
+          }
+          .animate-float-x { animation: float-x 4s ease-in-out infinite; }
+          .animate-float-x-delayed { animation: float-x-delayed 4s ease-in-out infinite 1.5s; }
+          .text-glow-indigo { text-shadow: 0 0 12px rgba(79, 70, 229, 1), 0 0 24px rgba(79, 70, 229, 0.4); }
+          .text-glow-emerald { text-shadow: 0 0 12px rgba(16, 185, 129, 1), 0 0 24px rgba(16, 185, 129, 0.4); }
+        ` }} />
       </div>
     );
   }
 
-  const hostAvatar = avatars[game.hostId];
-  const guestAvatar = game.guestId ? avatars[game.guestId] : null;
-
   return (
     <div className="flex flex-col h-[100dvh] bg-slate-950 text-white overflow-hidden relative pb-32">
-      {feedback && (
-        <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[250] flex items-center gap-3 px-6 py-4 rounded-2xl bg-slate-900 border border-indigo-500/30 shadow-[0_0_30px_rgba(79,70,229,0.3)] animate-in slide-in-from-top-full duration-300">
-          {feedback.type === 'success' ? <CheckCircle2 className="text-emerald-500" size={20} /> : <AlertCircle className="text-rose-500" size={20} />}
-          <span className="text-xs font-black text-white uppercase tracking-widest">{feedback.message}</span>
-        </div>
-      )}
-
       {showQuitModal && (
         <div className="fixed inset-0 z-[250] flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-md">
           <div className="bg-slate-900 border border-rose-500/30 p-8 rounded-[2rem] text-center max-w-xs w-full shadow-2xl">
             <h2 className="text-2xl font-black text-white uppercase mb-4">Exit Arena?</h2>
             <div className="grid grid-cols-2 gap-3 mt-8">
-              <button onClick={() => setShowQuitModal(false)} className="bg-slate-800 text-white py-4 rounded-xl text-[10px] font-black uppercase tracking-widest border border-white/10">CANCEL</button>
-              <button onClick={confirmLeave} className="bg-rose-600 text-white py-4 rounded-xl text-[10px] font-black uppercase tracking-widest">QUIT</button>
+              <button onClick={() => setShowQuitModal(false)} className="bg-slate-800 text-white py-4 rounded-xl text-[10px] font-black uppercase border border-white/10">CANCEL</button>
+              <button onClick={confirmLeave} className="bg-rose-600 text-white py-4 rounded-xl text-[10px] font-black uppercase">QUIT</button>
             </div>
           </div>
         </div>
@@ -654,102 +601,113 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col items-center">
         <div className="flex justify-center items-center gap-3 mb-6 mt-6 sticky top-0 z-[400] w-full">
            <div className={`px-2 py-1.5 rounded-xl border flex flex-col items-center min-w-[85px] relative transition-all duration-300 ${game.turn === 'host' ? 'bg-indigo-600 border-white scale-105 shadow-[0_0_15px_rgba(79,70,229,0.3)]' : 'bg-slate-800 border-white/10 opacity-80'}`}>
-              <ReactionBubble key={`${game.hostReaction}`} text={hostEcho?.text || ''} visible={!!hostEcho} />
+              <ReactionBubble text={hostEcho?.text || ''} visible={!!hostEcho} />
               <span className="text-base font-black text-white leading-none">{game.hostLastDice || '-'}</span>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <div className="w-4 h-4 rounded-md overflow-hidden bg-slate-950 border border-white/10 shrink-0">
-                  {hostAvatar ? <img src={hostAvatar} className="w-full h-full object-cover" /> : <User size={10} className="m-auto text-slate-500" />}
+                  {avatars[game.hostId] ? <img src={avatars[game.hostId]} className="w-full h-full object-cover" /> : <User size={10} className="m-auto text-slate-500" />}
                 </div>
                 <span className="text-[8px] font-black uppercase tracking-widest truncate max-w-[55px]">{game.hostId}</span>
               </div>
-              {game.turn === 'host' && !game.winner && <div className="flex items-center gap-1 mt-1 text-white"><Clock size={8} /><span className="text-[7px] font-black">{formatTime(timeLeft)}</span></div>}
            </div>
            <div className={`px-2 py-1.5 rounded-xl border flex flex-col items-center min-w-[85px] relative transition-all duration-300 ${game.turn === 'guest' ? 'bg-emerald-600 border-white scale-105 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'bg-slate-800 border-white/10 opacity-80'}`}>
-              <ReactionBubble key={`${game.guestReaction}`} text={guestEcho?.text || ''} visible={!!guestEcho} />
+              <ReactionBubble text={guestEcho?.text || ''} visible={!!guestEcho} />
               <span className="text-base font-black text-white leading-none">{game.guestLastDice || '-'}</span>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <div className="w-4 h-4 rounded-md overflow-hidden bg-slate-950 border border-white/10 shrink-0">
-                  {guestAvatar ? <img src={guestAvatar} className="w-full h-full object-cover" /> : <User size={10} className="m-auto text-slate-500" />}
+                <div className="w-4 h-4 rounded-md overflow-hidden bg-slate-950 border border-white/10 shrink-0 flex items-center justify-center">
+                  {game.guestId === "CHIP" ? <Bot size={12} className="text-emerald-400" /> : (avatars[game.guestId!] ? <img src={avatars[game.guestId!]} className="w-full h-full object-cover" /> : <User size={10} className="m-auto text-slate-500" />)}
                 </div>
                 <span className="text-[8px] font-black uppercase tracking-widest truncate max-w-[55px]">{game.guestId || 'WAITING'}</span>
               </div>
-              {game.turn === 'guest' && !game.winner && game.guestId && <div className="flex items-center gap-1 mt-1 text-white"><Clock size={8} /><span className="text-[7px] font-black">{formatTime(timeLeft)}</span></div>}
            </div>
         </div>
 
         <div className="w-full max-w-full mx-auto bg-white rounded-xl border-[4px] border-slate-900 shadow-2xl relative aspect-square mb-6 z-[60] overflow-hidden">
           <div className="absolute inset-0 flex flex-wrap z-10 rounded-lg">{renderBoard()}</div>
-          {game.winner && <BoardCelebration winnerName={game.winner} isMe={iWon} />}
+          {game.winner && <BoardCelebration winnerName={game.winner} isMe={game.winner === myProfile?.uniqueId} />}
+          
           <svg className="absolute inset-0 pointer-events-none z-[40] w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="ladder-gradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#fbbf24" />
+                <stop offset="100%" stopColor="#78350f" />
+              </linearGradient>
+            </defs>
+
+            {/* Robust Metallic Ladders - Fixed Design */}
             {Object.entries(LADDERS).map(([start, end]) => {
-              const s = getCellCoords(parseInt(start));
-              const e = getCellCoords(end);
-              const dx = e.x - s.x, dy = e.y - s.y, dist = Math.sqrt(dx * dx + dy * dy);
-              const px = -dy / dist, py = dx / dist;
+              const s = getCellCoords(parseInt(start)), e = getCellCoords(end), dx = e.x - s.x, dy = e.y - s.y, dist = Math.sqrt(dx * dx + dy * dy), px = -dy / dist, py = dx / dist;
+              const railWidth = 1.4;
               return (
-                <g key={`ladder-${start}`} className="drop-shadow-sm">
-                  <line x1={s.x + px} y1={s.y + py} x2={e.x + px} y2={e.y + py} stroke="#4b2c20" strokeWidth="0.8" strokeLinecap="round" />
-                  <line x1={s.x - px} y1={s.y - py} x2={e.x - px} y2={e.y - py} stroke="#4b2c20" strokeWidth="0.8" strokeLinecap="round" />
-                  {[0.2, 0.4, 0.6, 0.8].map(r => (<line key={r} x1={s.x + dx*r + px} y1={s.y + dy*r + py} x2={s.x + dx*r - px} y2={s.y + dy*r - py} stroke="#4b2c20" strokeWidth="0.5" />))}
+                <g key={`ladder-${start}`} className="drop-shadow-lg">
+                  {/* Rails */}
+                  <line x1={s.x + px*railWidth} y1={s.y + py*railWidth} x2={e.x + px*railWidth} y2={e.y + py*railWidth} stroke="url(#ladder-gradient)" strokeWidth="1.2" strokeLinecap="round" />
+                  <line x1={s.x - px*railWidth} y1={s.y - py*railWidth} x2={e.x - px*railWidth} y2={e.y - py*railWidth} stroke="url(#ladder-gradient)" strokeWidth="1.2" strokeLinecap="round" />
+                  {/* Rungs */}
+                  {[0.1, 0.25, 0.4, 0.55, 0.7, 0.85].map(r => (
+                    <line key={r} 
+                      x1={s.x + dx*r + px*railWidth} y1={s.y + dy*r + py*railWidth} 
+                      x2={s.x + dx*r - px*railWidth} y2={s.y + dy*r - px*railWidth} 
+                      stroke="#fbbf24" strokeWidth="0.8" strokeLinecap="round" 
+                    />
+                  ))}
+                  {/* Caps */}
+                  <circle cx={s.x + px*railWidth} cy={s.y + py*railWidth} r="0.8" fill="#78350f" />
+                  <circle cx={s.x - px*railWidth} cy={s.y - py*railWidth} r="0.8" fill="#78350f" />
+                  <circle cx={e.x + px*railWidth} cy={e.y + py*railWidth} r="0.8" fill="#fbbf24" />
+                  <circle cx={e.x - px*railWidth} cy={e.y - py*railWidth} r="0.8" fill="#fbbf24" />
                 </g>
               );
             })}
-            {Object.entries(SNAKES).map(([start, end]) => {
-              const s = getCellCoords(parseInt(start));
-              const e = getCellCoords(end);
-              const color = getSnakeColor(parseInt(start));
-              const path = `M ${s.x} ${s.y} C ${(s.x+e.x)/2 + 8} ${(s.y+e.y)/2 - 8}, ${(s.x+e.x)/2 - 8} ${(s.y+e.y)/2 + 8}, ${e.x} ${e.y}`;
+
+            {/* Snakes - 2 Eyes + Body Stripes */}
+            {Object.entries(SNAKES).map(([start, end], idx) => {
+              const s = getCellCoords(parseInt(start)), e = getCellCoords(end);
+              const color = SNAKE_COLORS[idx % SNAKE_COLORS.length];
+              const cx1 = (s.x + e.x) / 2 + (idx % 2 === 0 ? 12 : -12);
+              const cy1 = (s.y + e.y) / 2 - 8;
+              const cx2 = (s.x + e.x) / 2 + (idx % 2 === 0 ? -12 : 12);
+              const cy2 = (s.y + e.y) / 2 + 8;
+              const path = `M ${s.x} ${s.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${e.x} ${e.y}`;
               return (
-                <g key={`snake-${start}`} className="drop-shadow-xl">
-                  <path d={path} fill="none" stroke="black" strokeWidth="2.2" strokeLinecap="round" opacity="0.2" />
-                  <path d={path} fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
-                  <path d={path} fill="none" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeDasharray="0.5 2" opacity="0.4" />
-                  <g transform={`translate(${s.x}, ${s.y})`}>
-                    <circle r="2.5" fill={color} stroke="black" strokeWidth="0.3" />
-                    <circle cx="-0.8" cy="-0.5" r="0.4" fill="white" />
-                    <circle cx="0.8" cy="-0.5" r="0.4" fill="white" />
-                  </g>
+                <g key={`snake-${start}`} className="drop-shadow-md">
+                  <path d={path} fill="none" stroke={color} strokeWidth="2.8" strokeLinecap="round" opacity="0.95" />
+                  <path d={path} fill="none" stroke="rgba(0,0,0,0.25)" strokeWidth="2.8" strokeDasharray="1.5 2.5" strokeLinecap="round" />
+                  <circle cx={s.x} cy={s.y} r="2.8" fill={color} />
+                  <circle cx={s.x - 0.8} cy={s.y - 0.6} r="0.65" fill="white" />
+                  <circle cx={s.x - 0.8} cy={s.y - 0.6} r="0.25" fill="black" />
+                  <circle cx={s.x + 0.8} cy={s.y - 0.6} r="0.65" fill="white" />
+                  <circle cx={s.x + 0.8} cy={s.y - 0.6} r="0.25" fill="black" />
+                  <circle cx={e.x} cy={e.y} r="1.2" fill={color} />
                 </g>
               );
             })}
           </svg>
+
           <div className="absolute inset-0 z-[60] pointer-events-none">
-            <div className="absolute w-8 h-8 transition-all duration-150 ease-out" style={{ left: `${sameCell ? hostCoords.x - 2.5 : hostCoords.x}%`, top: `${hostCoords.y}%`, transform: 'translate(-50%, -85%)' }}>
-              <Pawn color="#4f46e5" />
-            </div>
-            <div className="absolute w-8 h-8 transition-all duration-150 ease-out" style={{ left: `${sameCell ? guestCoords.x + 2.5 : guestCoords.x}%`, top: `${guestCoords.y}%`, transform: 'translate(-50%, -85%)' }}>
-              <Pawn color="#10b981" />
-            </div>
+            <div className="absolute w-8 h-8 transition-all duration-150 ease-out" style={{ left: `${sameCell ? hostCoords.x - 2.5 : hostCoords.x}%`, top: `${hostCoords.y}%`, transform: 'translate(-50%, -85%)' }}><Pawn color="#4f46e5" /></div>
+            <div className="absolute w-8 h-8 transition-all duration-150 ease-out" style={{ left: `${sameCell ? guestCoords.x + 2.5 : guestCoords.x}%`, top: `${guestCoords.y}%`, transform: 'translate(-50%, -85%)' }}><Pawn color="#10b981" /></div>
           </div>
         </div>
       </div>
 
       <div className="fixed bottom-[110px] left-0 right-0 px-8 z-[150] flex flex-col items-center">
         {game.winner ? (
-          <button onClick={confirmLeave} className="w-full max-w-[280px] bg-white text-black font-black py-4 rounded-2xl shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3 uppercase tracking-widest text-xs animate-in slide-in-from-bottom-4 ring-2 ring-indigo-500/50">
-            <LogOut size={18} /> Back to Lobby
-          </button>
+          <button onClick={confirmLeave} className="w-full max-w-[280px] bg-white text-black font-black py-4 rounded-2xl shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3 uppercase tracking-widest text-xs ring-2 ring-indigo-500/50"><LogOut size={18} /> Back to Lobby</button>
         ) : (
           <div className="flex flex-col items-center gap-4 w-full max-w-sm">
             {game.guestId && (
               <div className="flex justify-center gap-2 p-1.5 bg-slate-900/60 backdrop-blur-2xl border border-white/20 rounded-[2rem] ring-1 ring-white/5 shadow-2xl">
                 {REACTIONS.map(r => (
-                  <button key={r.label} onClick={() => sendEcho(r.icon)} className="w-10 h-10 flex flex-col items-center justify-center rounded-2xl bg-slate-800 border border-white/5 hover:bg-white/20 active:scale-90 transition-all group overflow-hidden">
-                    <span className="text-lg grayscale group-hover:grayscale-0 transition-all">{r.icon}</span>
-                  </button>
+                  <button key={r.label} onClick={() => sendEcho(r.icon)} className="w-10 h-10 flex flex-col items-center justify-center rounded-2xl bg-slate-800 border border-white/5 hover:bg-white/20 active:scale-90 transition-all group overflow-hidden"><span className="text-lg grayscale group-hover:grayscale-0 transition-all">{r.icon}</span></button>
                 ))}
               </div>
             )}
             <div className="flex flex-col items-center gap-0.5">
               <button disabled={!isMyTurn || rolling || isAnimating || !game.guestId} onClick={rollDice} className={`w-16 h-16 rounded-[1.25rem] transition-all active:scale-90 relative ${!isMyTurn || rolling || isAnimating || !game.guestId ? 'opacity-40 grayscale pointer-events-none' : 'hover:scale-110 shadow-[0_0_20px_rgba(79,70,229,0.2)]'}`}>
                 <IsometricDie value={rolling ? rollingDiceValue : (game.lastDice || 1)} rolling={rolling} />
-                {isMyTurn && game.guestId && !rolling && !isAnimating && (
-                   <div className="absolute -top-1 -right-1 w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center border-2 border-white animate-pulse"><Sparkles size={10} className="text-white" /></div>
-                )}
+                {isMyTurn && game.guestId && !rolling && !isAnimating && (<div className="absolute -top-1 -right-1 w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center border-2 border-white animate-pulse"><Sparkles size={10} className="text-white" /></div>)}
               </button>
-              <div className="text-center min-h-[12px] mt-1">
-                {game.guestId && <p className={`text-[8px] font-black uppercase tracking-[0.2em] ${isMyTurn ? 'text-white' : 'text-slate-500'}`}>{isMyTurn ? "Roll Dice!" : "Opponent's Turn"}</p>}
-              </div>
             </div>
           </div>
         )}
