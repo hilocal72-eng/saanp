@@ -1,4 +1,3 @@
-
 export type Gender = 'male' | 'female';
 
 export interface UserProfile {
@@ -48,7 +47,8 @@ export interface GameState {
   hostReaction?: string;
   guestReaction?: string;
   lastUpdated?: number;
-  isBotGame?: boolean; // NEW: Distinguishes AI matches
+  turnAt?: number; // Timestamp when the current turn started
+  isBotGame?: boolean;
 }
 
 export enum Tab {

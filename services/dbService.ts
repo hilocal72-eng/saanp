@@ -1,8 +1,9 @@
-
 import { UserProfile, Friend, ChatMessage, GameState } from '../types';
 import { AIRTABLE_CONFIG } from '../constants';
 
 const STORAGE_KEY = 'snake_quest_db';
+
+const clean = (str: string) => str.replace(/'/g, "\\'");
 
 const airtableFetch = async (tableName: string, options: RequestInit = {}) => {
   const url = `https://api.airtable.com/v0/${AIRTABLE_CONFIG.BASE_ID}/${tableName}`;
@@ -23,6 +24,10 @@ const airtableFetch = async (tableName: string, options: RequestInit = {}) => {
     }
     return response.json();
   } catch (e: any) {
+    if (e.name === 'TypeError' && e.message === 'Failed to fetch') {
+      console.warn(`Network error fetching ${tableName}. Backend may be unreachable.`);
+      return { records: [] };
+    }
     console.error(`Airtable Error [${url}]:`, e.message);
     throw e;
   }
@@ -55,7 +60,6 @@ const parseGame = (record: any): GameState => {
     hostReaction: f.hostReaction ? String(f.hostReaction) : undefined,
     guestReaction: f.guestReaction ? String(f.guestReaction) : undefined,
     lastUpdated: f.lastUpdated ? Number(f.lastUpdated) : undefined,
-    // Infer Bot status from guestId instead of a dedicated field
     isBotGame: guestId === "CHIP"
   };
 };
@@ -64,7 +68,7 @@ export const dbService = {
   findPlayerGlobal: async (username: string): Promise<UserProfile | null> => {
     if (!username) return null;
     try {
-      const formula = `{name}='${username.replace(/'/g, "\\'")}'`;
+      const formula = `{name}='${clean(username)}'`;
       const data = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.USERS}?filterByFormula=${encodeURIComponent(formula)}`);
       if (data.records && data.records.length > 0) {
         const f = data.records[0].fields;
@@ -168,7 +172,7 @@ export const dbService = {
 
   getFriends: async (myUsername: string): Promise<any[]> => {
     try {
-      const formula = `OR({user1Id}='${myUsername.replace(/'/g, "\\'")}', {user2Id}='${myUsername.replace(/'/g, "\\'")}')`;
+      const formula = `OR({user1Id}='${clean(myUsername)}', {user2Id}='${clean(myUsername)}')`;
       const data = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.FRIENDS}?filterByFormula=${encodeURIComponent(formula)}`);
       if (!data.records || data.records.length === 0) return [];
       const friendItems = data.records.map((r: any) => {
@@ -178,22 +182,18 @@ export const dbService = {
       });
       const friendNames = friendItems.map(f => f.name);
       if (friendNames.length === 0) return [];
-      const profileFormula = `OR(${friendNames.map(n => `{name}='${n.replace(/'/g, "\\'")}'`).join(',')})`;
+      const profileFormula = `OR(${friendNames.map(n => `{name}='${clean(n)}'`).join(',')})`;
       const profileData = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.USERS}?filterByFormula=${encodeURIComponent(profileFormula)}`);
       const profilesByUid = profileData.records.reduce((acc: any, r: any) => { acc[r.fields.name] = r.fields; return acc; }, {});
       return friendItems.map(f => ({ ...f, lastSeen: profilesByUid[f.name]?.lastSeen || 0, avatarUrl: profilesByUid[f.name]?.avatarUrl }));
     } catch (e) { return []; }
   },
 
-  removeFriend: async (recordId: string): Promise<void> => {
-    await airtableFetch(`${AIRTABLE_CONFIG.TABLES.FRIENDS}/${recordId}`, { method: 'DELETE' });
-  },
-
   sendFriendRequest: async (myUsername: string, targetUsername: string): Promise<boolean> => {
     try {
       const target = await dbService.findPlayerGlobal(targetUsername);
       if (!target) return false;
-      const formula = `OR(AND({user1Id}='${myUsername.replace(/'/g, "\\'")}', {user2Id}='${targetUsername.replace(/'/g, "\\'") }'), AND({user1Id}='${targetUsername.replace(/'/g, "\\'")}', {user2Id}='${myUsername.replace(/'/g, "\\'") }'))`;
+      const formula = `OR(AND({user1Id}='${clean(myUsername)}', {user2Id}='${clean(targetUsername)}'), AND({user1Id}='${clean(targetUsername)}', {user2Id}='${clean(myUsername)}'))`;
       const existing = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.FRIENDS}?filterByFormula=${encodeURIComponent(formula)}`);
       if (existing.records && existing.records.length > 0) return true;
       await airtableFetch(AIRTABLE_CONFIG.TABLES.FRIENDS, { method: 'POST', body: JSON.stringify({ records: [{ fields: { user1Id: myUsername, user2Id: targetUsername, status: 'pending' } }] }) });
@@ -202,11 +202,15 @@ export const dbService = {
   },
 
   acceptFriend: async (myUsername: string, friendUsername: string) => {
-    const formula = `AND({user1Id}='${friendUsername}', {user2Id}='${myUsername}', {status}='pending')`;
+    const formula = `AND({user1Id}='${clean(friendUsername)}', {user2Id}='${clean(myUsername)}', {status}='pending')`;
     const data = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.FRIENDS}?filterByFormula=${encodeURIComponent(formula)}`);
     if (data.records.length > 0) {
       await airtableFetch(`${AIRTABLE_CONFIG.TABLES.FRIENDS}/${data.records[0].id}`, { method: 'PATCH', body: JSON.stringify({ fields: { status: 'accepted' } }) });
     }
+  },
+
+  removeFriend: async (friendshipId: string) => {
+    await airtableFetch(`${AIRTABLE_CONFIG.TABLES.FRIENDS}/${friendshipId}`, { method: 'DELETE' });
   },
 
   sendMessage: async (msg: ChatMessage) => {
@@ -215,25 +219,28 @@ export const dbService = {
   },
 
   getMessages: async (userA: string, userB: string): Promise<ChatMessage[]> => {
-    const filter = `OR(AND({senderId}='${userA}',{receiverId}='${userB}'), AND({senderId}='${userB}',{receiverId}='${userA}'))`;
+    const filter = `OR(AND({senderId}='${clean(userA)}',{receiverId}='${clean(userB)}'), AND({senderId}='${clean(userB)}',{receiverId}='${clean(userA)}'))`;
     const data = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.MESSAGES}?filterByFormula=${encodeURIComponent(filter)}&sort[0][field]=timestamp&sort[0][direction]=asc`);
     return data.records.map((r: any) => ({ id: r.id, ...r.fields }));
   },
 
   getPendingRequestCount: async (myUsername: string) => {
-    const formula = `AND({user2Id}='${myUsername}', {status}='pending')`;
-    const data = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.FRIENDS}?filterByFormula=${encodeURIComponent(formula)}`);
-    return data.records.length;
+    try {
+      const formula = `AND({user2Id}='${clean(myUsername)}', {status}='pending')`;
+      const data = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.FRIENDS}?filterByFormula=${encodeURIComponent(formula)}`);
+      return data.records?.length || 0;
+    } catch (e) { return 0; }
   },
 
   getNewMessageCount: async (myUsername: string, since: number) => {
-    const filter = `AND({receiverId}='${myUsername.replace(/'/g, "\\'")}', {timestamp} > ${since})`;
-    const data = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.MESSAGES}?filterByFormula=${encodeURIComponent(filter)}`);
-    return data.records.length;
+    try {
+      const filter = `AND({receiverId}='${clean(myUsername)}', {timestamp} > ${since})`;
+      const data = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.MESSAGES}?filterByFormula=${encodeURIComponent(filter)}`);
+      return data.records?.length || 0;
+    } catch (e) { return 0; }
   },
 
   hostGame: async (hostName: string, hostAvatar: string | undefined, code: string, isBotGame: boolean = false): Promise<GameState> => {
-    // Removed isBotGame field from payload to match Airtable schema
     const fields = { 
       code: String(code), 
       hostId: hostName, 
@@ -254,7 +261,7 @@ export const dbService = {
 
   joinGame: async (guestName: string, guestAvatar: string | undefined, code: string): Promise<{ game?: GameState, error?: string }> => {
     try {
-      const formula = `{code}='${code}'`;
+      const formula = `{code}='${clean(code)}'`;
       const data = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.GAMES}?filterByFormula=${encodeURIComponent(formula)}`);
       if (!data.records || data.records.length === 0) return { error: 'ROOM_NOT_FOUND' };
       const record = data.records[0];
@@ -267,7 +274,6 @@ export const dbService = {
 
   updateGame: async (game: GameState) => {
     if (!game.id) return;
-    // Removed isBotGame field from payload to match Airtable schema
     const fields = { 
       code: game.code, 
       hostId: game.hostId, 
@@ -281,7 +287,7 @@ export const dbService = {
       guestLastDice: game.guestLastDice || 0, 
       hostReaction: game.hostReaction || "", 
       guestReaction: game.guestReaction || "", 
-      lastUpdated: Date.now() 
+      lastUpdated: Date.now()
     };
     await airtableFetch(`${AIRTABLE_CONFIG.TABLES.GAMES}/${game.id}`, { method: 'PATCH', body: JSON.stringify({ fields }) });
   },
@@ -292,7 +298,7 @@ export const dbService = {
 
   getGameByCode: async (code: string): Promise<GameState | undefined> => {
     try {
-      const formula = `{code}='${code}'`;
+      const formula = `{code}='${clean(code)}'`;
       const data = await airtableFetch(`${AIRTABLE_CONFIG.TABLES.GAMES}?filterByFormula=${encodeURIComponent(formula)}`);
       if (data.records && data.records.length > 0) return parseGame(data.records[0]);
       return undefined;

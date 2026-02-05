@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Tab, UserProfile, GameState } from './types';
 import { dbService } from './services/dbService';
@@ -69,11 +68,23 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-[100dvh] bg-slate-950 flex flex-col max-w-md mx-auto relative overflow-hidden shadow-[0_0_100px_rgba(0,0,0,1)] border-x border-slate-900">
-      <main className="flex-1 overflow-hidden relative">
-        {activeTab === Tab.PROFILE && <ProfileTab currentProfile={myProfile} onProfileUpdate={(p) => { setMyProfile(p); if (!p) { setActiveTab(Tab.PROFILE); setActiveGame(null); } }} />}
-        {activeTab === Tab.FRIENDS && (myProfile ? <FriendsTab myProfile={myProfile} /> : renderProfileRequired("Social Center", "Connect with players and build your squad.", <Users />, Tab.FRIENDS))}
-        {activeTab === Tab.GAME && (myProfile ? <GameTab myProfile={myProfile} game={activeGame} setGame={setActiveGame} onProfileUpdate={setMyProfile} /> : renderProfileRequired("Wanna Play?", "Unlock global matchmaking and start your quest.", <Gamepad2 />, Tab.GAME))}
+      <main className="flex-1 overflow-hidden relative h-full">
+        {/* Profile Tab - Conditional since it's the entry point */}
+        <div className={activeTab === Tab.PROFILE ? 'h-full' : 'hidden'}>
+          <ProfileTab currentProfile={myProfile} onProfileUpdate={(p) => { setMyProfile(p); if (!p) { setActiveTab(Tab.PROFILE); setActiveGame(null); } }} />
+        </div>
+        
+        {/* Friends Tab - Hidden CSS used to preserve state */}
+        <div className={activeTab === Tab.FRIENDS ? 'h-full' : 'hidden'}>
+          {myProfile ? <FriendsTab myProfile={myProfile} /> : renderProfileRequired("Social Center", "Connect with players and build your squad.", <Users />, Tab.FRIENDS)}
+        </div>
+        
+        {/* Game Tab - Hidden CSS used to preserve timer and state */}
+        <div className={activeTab === Tab.GAME ? 'h-full' : 'hidden'}>
+          {myProfile ? <GameTab myProfile={myProfile} game={activeGame} setGame={setActiveGame} onProfileUpdate={setMyProfile} /> : renderProfileRequired("Wanna Play?", "Unlock global matchmaking and start your quest.", <Gamepad2 />, Tab.GAME)}
+        </div>
       </main>
+      
       <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[95%] max-w-[360px] z-[150]">
         <nav className="bg-slate-900/90 backdrop-blur-2xl rounded-[2.2rem] border border-white/10 shadow-2xl px-1.5 py-1.5 flex justify-around items-center">
           <button onClick={() => setActiveTab(Tab.PROFILE)} className={`flex-1 flex flex-col items-center gap-0.5 transition-all duration-300 py-2 rounded-2xl ${activeTab === Tab.PROFILE ? 'bg-indigo-600' : 'hover:bg-white/5'}`}>
