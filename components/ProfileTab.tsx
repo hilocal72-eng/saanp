@@ -2,10 +2,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { UserProfile, Gender } from '../types';
 import { dbService } from '../services/dbService';
+import { STICKERS } from '../constants';
 import { 
   User, Copy, AlertTriangle, PartyPopper, Sparkles, 
   LogIn, UserPlus, LogOut, Swords, TrendingUp, Trophy, KeyRound, 
-  Eye, EyeOff, RefreshCw, Loader2, X, Scissors, Pencil
+  Eye, EyeOff, RefreshCw, Loader2, X, Scissors, Pencil, Coins,
+  Smile, LayoutGrid, Star
 } from 'lucide-react';
 
 interface ProfileTabProps {
@@ -104,6 +106,7 @@ const CropModal: React.FC<CropModalProps> = ({ imageSrc, onConfirm, onCancel }) 
 
 const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile }) => {
   const [mode, setMode] = useState<'create' | 'login'>('login');
+  const [subTab, setSubTab] = useState<'stats' | 'collection'>('stats');
   const [name, setName] = useState(currentProfile?.name || '');
   const [pin, setPin] = useState(currentProfile?.pin || '');
   const [showPin, setShowPin] = useState(false);
@@ -111,6 +114,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [updatingFavs, setUpdatingFavs] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
@@ -143,6 +147,37 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
     navigator.clipboard.writeText(currentProfile.uniqueId);
     setCopyFeedback(true);
     setTimeout(() => setCopyFeedback(false), 2000);
+  };
+
+  const toggleFavourite = async (stickerId: string) => {
+    if (!currentProfile || updatingFavs) return;
+    const currentFavs = currentProfile.favouriteStickers || [];
+    let newFavs: string[];
+    
+    if (currentFavs.includes(stickerId)) {
+      newFavs = currentFavs.filter(id => id !== stickerId);
+    } else {
+      if (currentFavs.length >= 5) {
+        setError("Maximum 5 favourites allowed.");
+        setTimeout(() => setError(null), 3000);
+        return;
+      }
+      newFavs = [...currentFavs, stickerId];
+    }
+
+    setUpdatingFavs(true);
+    try {
+      const success = await dbService.updateFavourites(currentProfile.id!, newFavs);
+      if (success) {
+        const updated = { ...currentProfile, favouriteStickers: newFavs };
+        onProfileUpdate(updated);
+        localStorage.setItem('snake_quest_db', JSON.stringify({ users: [updated], friends: [], chats: [], games: [] }));
+      }
+    } catch (e) {
+      setError("Failed to update favourites.");
+    } finally {
+      setUpdatingFavs(false);
+    }
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -188,7 +223,10 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
   const isLoggedIn = !!currentProfile;
   const winCount = currentProfile?.wins || 0;
   const lossCount = currentProfile?.losses || 0;
-  const winRate = winCount + lossCount > 0 ? Math.round((winCount / (winCount + lossCount)) * 100) : 0;
+  const coinCount = currentProfile?.coins || 0;
+  const myOwnedIds = currentProfile?.ownedStickers || [];
+  const myStickers = STICKERS.filter(s => myOwnedIds.includes(s.id));
+  const myFavIds = currentProfile?.favouriteStickers || [];
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-slate-950 overflow-x-hidden relative">
@@ -201,6 +239,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
       <div className="relative z-10 flex flex-col p-6 pb-48 animate-in fade-in duration-700">
         <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
         {tempImage && <CropModal imageSrc={tempImage} onConfirm={handleCropConfirm} onCancel={() => setTempImage(null)} />}
+        
         {showSuccess && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-xl animate-in fade-in duration-300">
             <div className="bg-slate-900 border border-indigo-500/30 p-10 rounded-[2.5rem] text-center max-w-xs w-full shadow-2xl">
@@ -211,7 +250,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
           </div>
         )}
 
-        <div className="text-center mt-12 mb-10 px-4">
+        <div className="text-center mt-12 mb-8 px-4">
           <div className="relative inline-block group">
             <div className="absolute inset-0 bg-indigo-500 blur-2xl opacity-20 group-hover:opacity-40 transition-opacity" />
             <div onClick={handleAvatarClick} className={`w-24 h-24 bg-slate-900/60 backdrop-blur-2xl border-2 border-indigo-500/30 rounded-3xl shadow-[0_0_40px_rgba(79,70,229,0.3)] flex items-center justify-center mx-auto rotate-3 border-white/20 relative overflow-hidden transition-all ${isLoggedIn ? 'cursor-pointer hover:scale-105 active:scale-95' : ''}`}>
@@ -222,7 +261,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
           </div>
           <div className="flex flex-col items-center justify-center gap-2 mt-6">
             <div className="flex items-center gap-3">
-              <h1 className="text-4xl font-black tracking-tighter text-white uppercase italic drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)]">
+              <h1 className="text-3xl font-black tracking-tighter text-white uppercase italic drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)]">
                 {isLoggedIn ? currentProfile.name : (mode === 'login' ? 'Login' : 'New Player')}
               </h1>
               {isLoggedIn && <button onClick={() => { localStorage.removeItem('snake_quest_db'); onProfileUpdate(null); window.location.reload(); }} className="p-2 bg-rose-500/20 hover:bg-rose-500 text-rose-500 hover:text-white rounded-xl border border-rose-500/20 transition-all active:scale-90 backdrop-blur-sm"><LogOut size={18} strokeWidth={3} /></button>}
@@ -237,8 +276,28 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
           </div>
         </div>
 
-        <div className="bg-slate-900/40 backdrop-blur-3xl rounded-[2.5rem] border border-white/10 p-8 space-y-8 shadow-[0_20px_60px_rgba(0,0,0,0.6)] relative overflow-hidden group">
-          {error && <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-xl flex items-center gap-3 text-rose-500 text-[10px] font-black uppercase tracking-wider animate-in shake duration-300"><AlertTriangle size={16} />{error}</div>}
+        {isLoggedIn && (
+          <div className="flex justify-center mb-6">
+            <div className="bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-2xl p-1.5 flex gap-2">
+              <button 
+                onClick={() => setSubTab('stats')}
+                className={`px-6 py-2 rounded-xl flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all ${subTab === 'stats' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:text-white'}`}
+              >
+                <LayoutGrid size={14} /> Stats
+              </button>
+              <button 
+                onClick={() => setSubTab('collection')}
+                className={`px-6 py-2 rounded-xl flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all ${subTab === 'collection' ? 'bg-amber-600 text-white shadow-lg shadow-amber-500/20' : 'text-slate-400 hover:text-white'}`}
+              >
+                <Smile size={14} /> Stickers
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="bg-slate-900/40 backdrop-blur-3xl rounded-[2.5rem] border border-white/10 p-8 shadow-[0_20px_60px_rgba(0,0,0,0.6)] relative overflow-hidden group">
+          {error && <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-xl flex items-center gap-3 text-rose-500 text-[10px] font-black uppercase tracking-wider animate-in shake duration-300 mb-6"><AlertTriangle size={16} />{error}</div>}
+          
           {!isLoggedIn ? (
             <div className="space-y-4">
               <div className="space-y-2">
@@ -257,40 +316,139 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
               )}
               <div className="space-y-4 pt-4">
                 <button onClick={handleAction} disabled={saving} className="w-full bg-white text-black font-black py-5 rounded-2xl flex items-center justify-center gap-3 transition-all active:scale-95 shadow-[0_15px_40px_rgba(255,255,255,0.1)] uppercase tracking-[0.2em] text-[11px]">{saving ? '...' : (mode === 'login' ? 'ENTER ARENA' : 'REGISTER PLAYER')}</button>
-                <button onClick={() => setMode(mode === 'create' ? 'login' : 'create')} className="w-full text-slate-200 font-black text-[9px] uppercase tracking-[0.25em] flex items-center justify-center gap-2 hover:text-indigo-400 transition-colors">{mode === 'login' ? <><UserPlus size={14} /> new player? Sign up</> : <><LogIn size={14} /> Existing player? Log in</>}</button>
+                <button onClick={() => setMode(mode === 'create' ? 'login' : 'create')} className="w-full group text-slate-200 font-black text-[10px] uppercase tracking-[0.3em] flex flex-col items-center justify-center gap-1.5 hover:text-white transition-all duration-300">
+                  <div className="flex items-center gap-2">
+                    {mode === 'login' ? <UserPlus size={14} className="text-indigo-400" /> : <LogIn size={14} className="text-indigo-400" />}
+                    <span>{mode === 'login' ? 'NEW TO THE ARENA?' : 'ALREADY REGISTERED?'}</span>
+                  </div>
+                  <span className="text-indigo-400 font-black tracking-[0.4em] group-hover:text-indigo-300 group-hover:scale-105 transition-all animate-text-glow-pulse">
+                    {mode === 'login' ? 'JOIN THE SQUAD' : 'RETURN TO LOGIN'}
+                  </span>
+                </button>
               </div>
             </div>
-          ) : (
+          ) : subTab === 'stats' ? (
             <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
+              <div className="flex justify-center -mt-4 mb-2">
+                 <div className="bg-amber-500/10 border border-amber-500/30 px-6 py-3 rounded-2xl flex items-center gap-3 shadow-[0_0_20px_rgba(245,158,11,0.15)] group/coins">
+                   <div className="w-10 h-10 bg-amber-500 rounded-lg flex items-center justify-center shadow-lg shadow-amber-900/40 ring-1 ring-white/20 group-hover/coins:rotate-12 transition-transform">
+                     <Coins size={20} className="text-white" strokeWidth={3} />
+                   </div>
+                   <div className="flex flex-col">
+                     <span className="text-[7px] font-black text-amber-400 uppercase tracking-[0.3em] leading-tight mb-0.5">Total Coins</span>
+                     <span className="text-2xl font-black text-white tabular-nums drop-shadow-[0_0_8px_rgba(245,158,11,0.5)]">{coinCount}</span>
+                   </div>
+                 </div>
+              </div>
+
               <div className="flex items-center gap-2 relative">
-                <div className="flex-1 bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-2xl relative overflow-hidden group/stat shadow-inner">
-                   <div className="absolute -right-2 -top-2 opacity-20 group-hover/stat:scale-110 transition-transform"><TrendingUp size={40} className="text-emerald-500" /></div>
-                   <span className="text-[7px] font-black text-emerald-400 uppercase tracking-[0.2em] block mb-1">Total Wins</span>
+                <div className="flex-1 bg-emerald-500/10 border border-emerald-500/30 p-5 rounded-3xl relative overflow-hidden group/stat shadow-inner">
+                   <div className="absolute -right-2 -top-2 opacity-20 group-hover/stat:scale-110 transition-transform"><Trophy size={48} className="text-emerald-500" /></div>
+                   <span className="text-[8px] font-black text-emerald-400 uppercase tracking-[0.2em] block mb-1">Total Wins</span>
                    <span className="text-3xl font-black text-white tabular-nums drop-shadow-[0_0_10px_rgba(16,185,129,0.3)]">{winCount}</span>
                 </div>
                 
-                {/* SMALLER REFRESH ICON IN BETWEEN */}
                 <button 
                   onClick={handleManualRefresh}
-                  className={`absolute left-1/2 -translate-x-1/2 z-20 p-2 bg-slate-800 rounded-full border border-white/10 text-indigo-400 hover:text-white transition-all active:scale-90 shadow-xl ${refreshing ? 'animate-spin opacity-50' : ''}`}
+                  className={`absolute left-1/2 -translate-x-1/2 z-20 p-2.5 bg-slate-800 rounded-full border border-white/10 text-indigo-400 hover:text-white transition-all active:scale-90 shadow-xl ${refreshing ? 'animate-spin opacity-50' : ''}`}
                 >
-                  <RefreshCw size={12} strokeWidth={3} />
+                  <RefreshCw size={14} strokeWidth={3} />
                 </button>
 
-                <div className="flex-1 bg-rose-500/10 border border-rose-500/30 p-4 rounded-2xl relative overflow-hidden group/stat shadow-inner">
-                   <div className="absolute -right-2 -top-2 opacity-20 group-hover/stat:scale-110 transition-transform"><Swords size={40} className="text-rose-500" /></div>
-                   <span className="text-[7px] font-black text-rose-400 uppercase tracking-[0.2em] block mb-1">Losses</span>
+                <div className="flex-1 bg-rose-500/10 border border-rose-500/30 p-5 rounded-3xl relative overflow-hidden group/stat shadow-inner">
+                   <div className="absolute -right-2 -top-2 opacity-20 group-hover/stat:scale-110 transition-transform"><Swords size={48} className="text-rose-500" /></div>
+                   <span className="text-[8px] font-black text-rose-400 uppercase tracking-[0.2em] block mb-1">Losses</span>
                    <span className="text-3xl font-black text-white tabular-nums drop-shadow-[0_0_10px_rgba(244,63,94,0.3)]">{lossCount}</span>
                 </div>
               </div>
-              <div className="bg-slate-950 rounded-2xl p-4 border border-white/10 flex items-center justify-between shadow-inner">
-                <div className="flex flex-col"><span className="text-[8px] font-black text-slate-300 uppercase tracking-widest">Proficiency</span><div className="flex items-center gap-2 mt-1"><span className="text-xs font-black text-indigo-400 uppercase tracking-tighter">Accuracy</span><span className="text-xs font-black text-white">{winRate}%</span></div></div>
-                <div className="w-12 h-12 rounded-full border-2 border-indigo-500/30 flex items-center justify-center relative"><svg className="w-12 h-12 -rotate-90"><circle cx="24" cy="24" r="20" fill="transparent" stroke="currentColor" strokeWidth="3" className="text-slate-800" /><circle cx="24" cy="24" r="20" fill="transparent" stroke="currentColor" strokeWidth="3" strokeDasharray={`${winRate * 1.25}, 125`} className="text-indigo-500" /></svg><Trophy size={14} className="absolute text-indigo-500" /></div>
+
+              <div className="pt-4 border-t border-white/5">
+                 <div className="flex items-center gap-3 mb-4">
+                    <TrendingUp size={16} className="text-indigo-400" />
+                    <h4 className="text-[10px] font-black text-white uppercase tracking-[0.3em]">Battle Records</h4>
+                 </div>
+                 <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-slate-950/80 rounded-2xl p-4 border border-white/5">
+                       <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest mb-1 block">Games Played</span>
+                       <span className="text-xl font-black text-white italic">{winCount + lossCount}</span>
+                    </div>
+                    <div className="bg-slate-950/80 rounded-2xl p-4 border border-white/5">
+                       <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest mb-1 block">Arena Rank</span>
+                       <span className="text-xl font-black text-amber-400 italic">#{Math.max(1, 1000 - winCount * 10)}</span>
+                    </div>
+                 </div>
               </div>
+            </div>
+          ) : (
+            <div className="animate-in slide-in-from-right-8 duration-500">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-col gap-1">
+                   <div className="flex items-center gap-2">
+                      <Smile size={18} className="text-amber-400" />
+                      <h3 className="text-xs font-black text-white uppercase tracking-[0.2em]">Sticker Loot</h3>
+                   </div>
+                   <p className="text-[8px] font-black text-amber-500/80 uppercase tracking-widest">Pick 5 for In-Game Reactions</p>
+                </div>
+                <div className="flex flex-col items-end">
+                  <span className={`px-3 py-1 rounded-full border text-[9px] font-black tabular-nums transition-all ${myFavIds.length === 5 ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-slate-950 border-white/10 text-slate-400'}`}>
+                    {myFavIds.length}/5 Selected
+                  </span>
+                </div>
+              </div>
+
+              {myStickers.length === 0 ? (
+                <div className="py-12 text-center bg-slate-950/40 rounded-3xl border border-dashed border-white/10">
+                   <LayoutGrid size={32} className="mx-auto text-slate-700 mb-4 opacity-50" />
+                   <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-relaxed">
+                     Your vault is empty.<br/>Visit the shop to unlock loot!
+                   </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-3">
+                  {myStickers.map(s => {
+                    const isFav = myFavIds.includes(s.id);
+                    return (
+                      <div 
+                        key={s.id} 
+                        onClick={() => toggleFavourite(s.id)}
+                        className={`bg-slate-950/60 rounded-2xl p-2 border flex flex-col items-center gap-2 group transition-all relative overflow-hidden shadow-inner cursor-pointer ${isFav ? 'border-amber-500/50 bg-amber-500/5' : 'border-white/5 hover:border-white/20'}`}
+                      >
+                         <div className={`absolute top-1 right-1 transition-all ${isFav ? 'text-amber-500 scale-110' : 'text-slate-700 opacity-20'}`}>
+                            <Star size={10} fill={isFav ? "currentColor" : "none"} strokeWidth={3} />
+                         </div>
+                         <div className={`w-14 h-14 bg-black/40 rounded-xl flex items-center justify-center p-2 shadow-inner border transition-all ${isFav ? 'border-amber-500/30' : 'border-white/5'} group-hover:scale-105`}>
+                            <img src={s.image} className="w-full h-full object-contain drop-shadow-lg" alt={s.name} />
+                         </div>
+                         <span className={`text-[7px] font-black uppercase tracking-tighter truncate w-full text-center ${isFav ? 'text-amber-400' : 'text-slate-500'}`}>{s.name}</span>
+                      </div>
+                    );
+                  })}
+                  {Array.from({ length: Math.max(0, 6 - myStickers.length) }).map((_, i) => (
+                    <div key={`empty-${i}`} className="aspect-square bg-slate-950/20 rounded-2xl border border-dashed border-white/5 flex items-center justify-center opacity-30">
+                       <div className="w-1.5 h-1.5 rounded-full bg-slate-700" />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
       </div>
+      
+      <style dangerouslySetInnerHTML={{ __html: `
+        .animate-text-glow-pulse { animation: text-glow-pulse 2s infinite; }
+        @keyframes text-glow-pulse { 
+          0%, 100% { text-shadow: 0 0 5px rgba(99, 102, 241, 0); }
+          50% { text-shadow: 0 0 15px rgba(99, 102, 241, 0.6); }
+        }
+        .shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake {
+          10%, 90% { transform: translate3d(-1px, 0, 0); }
+          20%, 80% { transform: translate3d(2px, 0, 0); }
+          30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+          40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+      ` }} />
     </div>
   );
 };

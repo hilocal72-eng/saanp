@@ -90,6 +90,32 @@
           100% { transform: scale(1) rotate(0deg); }
         }
 
+        @keyframes text-flicker-glow {
+          0%, 100% { opacity: 1; text-shadow: 0 0 4px rgba(99, 102, 241, 0.2); }
+          50% { opacity: 0.6; text-shadow: 0 0 15px rgba(99, 102, 241, 0.8); }
+        }
+
+        /* Floating effects for game lobby */
+        @keyframes title-float {
+          0%, 100% { transform: translateY(0) rotate(-1deg); }
+          50% { transform: translateY(-12px) rotate(1deg); }
+        }
+
+        @keyframes subtitle-pulse {
+          0%, 100% { transform: scale(1) opacity: 0.8; }
+          50% { transform: scale(1.05) opacity: 1; }
+        }
+
+        @keyframes float-x {
+          0%, 100% { transform: translateX(-48px) translateY(0); }
+          50% { transform: translateX(-52px) translateY(-5px); }
+        }
+
+        @keyframes float-x-delayed {
+          0%, 100% { transform: translateX(48px) translateY(0); }
+          50% { transform: translateX(52px) translateY(-5px); }
+        }
+
         .animate-spark {
           animation: spark-burst 1.2s cubic-bezier(0, 0.5, 0.2, 1) infinite;
         }
@@ -116,6 +142,28 @@
 
         .animate-confetti-fall {
           animation: confetti-fall linear forwards;
+        }
+
+        .animate-text-glow-pulse {
+          animation: text-flicker-glow 2s ease-in-out infinite;
+        }
+
+        /* Lobby animation class mapping */
+        .animate-title-float {
+          animation: title-float 4s ease-in-out infinite;
+        }
+
+        .animate-subtitle-pulse {
+          animation: subtitle-pulse 3s ease-in-out infinite;
+        }
+
+        .animate-float-x {
+          animation: float-x 5s ease-in-out infinite;
+        }
+
+        .animate-float-x-delayed {
+          animation: float-x-delayed 5s ease-in-out infinite;
+          animation-delay: -2.5s;
         }
 
         .shine-effect {

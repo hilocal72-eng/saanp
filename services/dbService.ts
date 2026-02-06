@@ -1,3 +1,4 @@
+
 import { UserProfile, Friend, ChatMessage, GameState } from '../types';
 import { AIRTABLE_CONFIG } from '../constants';
 
@@ -60,7 +61,7 @@ const parseGame = (record: any): GameState => {
     hostReaction: f.hostReaction ? String(f.hostReaction) : undefined,
     guestReaction: f.guestReaction ? String(f.guestReaction) : undefined,
     lastUpdated: f.lastUpdated ? Number(f.lastUpdated) : undefined,
-    isBotGame: guestId === "CHIP"
+    isBotGame: guestId === "FoxyBot"
   };
 };
 
@@ -83,7 +84,8 @@ export const dbService = {
           wins: Number(f.wins || 0),
           losses: Number(f.losses || 0),
           coins: Number(f.coins || 0),
-          ownedStickers: f.ownedStickers ? String(f.ownedStickers).split(',').filter(Boolean) : []
+          ownedStickers: f.ownedStickers ? String(f.ownedStickers).split(',').filter(Boolean) : [],
+          favouriteStickers: f.favouriteStickers ? String(f.favouriteStickers).split(',').filter(Boolean) : []
         } as UserProfile;
       }
       return null;
@@ -109,13 +111,20 @@ export const dbService = {
     });
   },
 
-  incrementStats: async (username: string, isWin: boolean) => {
+  incrementStats: async (username: string, isWin: boolean, isBotGame: boolean = false) => {
     try {
       const user = await dbService.findPlayerGlobal(username);
       if (user && user.id) {
-        const fields: any = isWin 
-          ? { wins: (user.wins || 0) + 1, coins: (user.coins || 0) + 50 }
-          : { losses: (user.losses || 0) + 1 };
+        let coinBonus = 0;
+        if (isWin && !isBotGame) {
+          coinBonus = 10;
+        }
+
+        const fields: any = {
+          wins: isWin ? (user.wins || 0) + 1 : (user.wins || 0),
+          losses: !isWin ? (user.losses || 0) + 1 : (user.losses || 0),
+          coins: (user.coins || 0) + coinBonus
+        };
         
         await airtableFetch(`${AIRTABLE_CONFIG.TABLES.USERS}/${user.id}`, {
           method: 'PATCH',
@@ -136,8 +145,9 @@ export const dbService = {
       lastSeen: Date.now(),
       wins: 0,
       losses: 0,
-      coins: 100,
-      ownedStickers: ""
+      coins: 0,
+      ownedStickers: "",
+      favouriteStickers: ""
     };
     
     const result = await airtableFetch(AIRTABLE_CONFIG.TABLES.USERS, {
@@ -145,7 +155,7 @@ export const dbService = {
       body: JSON.stringify({ records: [{ fields }] })
     });
     
-    const saved = { ...profile, id: result.records[0].id, wins: 0, losses: 0, coins: 100, ownedStickers: [] };
+    const saved = { ...profile, id: result.records[0].id, wins: 0, losses: 0, coins: 0, ownedStickers: [], favouriteStickers: [] };
     const db = getLocalDB();
     db.users = [saved];
     saveLocalDB(db);
@@ -155,16 +165,36 @@ export const dbService = {
   purchaseSticker: async (username: string, stickerId: string, price: number): Promise<boolean> => {
     try {
       const user = await dbService.findPlayerGlobal(username);
-      if (!user || !user.id) return false;
-      const currentCoins = user.coins || 0;
-      if (currentCoins < price) return false;
-      const owned = user.ownedStickers || [];
-      if (owned.includes(stickerId)) return true;
-      const newCoins = currentCoins - price;
-      const newOwned = [...owned, stickerId].join(',');
+      if (!user || !user.id || (user.coins || 0) < price) return false;
+      
+      const currentOwned = user.ownedStickers || [];
+      if (currentOwned.includes(stickerId)) return true;
+      
+      const newOwned = [...currentOwned, stickerId];
+      const newCoins = (user.coins || 0) - price;
+      
       await airtableFetch(`${AIRTABLE_CONFIG.TABLES.USERS}/${user.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ fields: { coins: newCoins, ownedStickers: newOwned } })
+        body: JSON.stringify({ 
+          fields: { 
+            coins: newCoins,
+            ownedStickers: newOwned.join(',')
+          } 
+        })
+      });
+      return true;
+    } catch (e) { return false; }
+  },
+
+  updateFavourites: async (userId: string, stickerIds: string[]): Promise<boolean> => {
+    try {
+      await airtableFetch(`${AIRTABLE_CONFIG.TABLES.USERS}/${userId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ 
+          fields: { 
+            favouriteStickers: stickerIds.join(',')
+          } 
+        })
       });
       return true;
     } catch (e) { return false; }
@@ -244,7 +274,7 @@ export const dbService = {
     const fields = { 
       code: String(code), 
       hostId: hostName, 
-      guestId: isBotGame ? "CHIP" : "",
+      guestId: isBotGame ? "FoxyBot" : "",
       hostPos: 1, 
       guestPos: 1, 
       turn: 'host', 

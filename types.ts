@@ -1,3 +1,4 @@
+
 export type Gender = 'male' | 'female';
 
 export interface UserProfile {
@@ -12,13 +13,14 @@ export interface UserProfile {
   losses?: number;
   coins?: number;
   ownedStickers?: string[];
+  favouriteStickers?: string[];
 }
 
 export interface Friend {
   id: string;
   name: string;
   uniqueId: string;
-  status: 'pending' | 'accepted';
+  status: 'accepted' | 'pending';
   lastSeen?: number;
   unreadCount?: number;
   lastMessageTimestamp?: number;
@@ -47,12 +49,13 @@ export interface GameState {
   hostReaction?: string;
   guestReaction?: string;
   lastUpdated?: number;
-  turnAt?: number; // Timestamp when the current turn started
+  turnAt?: number; 
   isBotGame?: boolean;
 }
 
 export enum Tab {
   PROFILE = 'profile',
   FRIENDS = 'friends',
-  GAME = 'game'
+  GAME = 'game',
+  SHOP = 'shop'
 }
