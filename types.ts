@@ -41,6 +41,8 @@ export interface GameState {
   guestId?: string;
   hostPos: number;
   guestPos: number;
+  hostLandingPos?: number;
+  guestLandingPos?: number;
   turn: 'host' | 'guest';
   winner?: string;
   lastDice: number;

@@ -76,18 +76,16 @@
           20%, 100% { transform: translateX(150%) skewX(-25deg); }
         }
 
-        @keyframes dice-tumble {
-          0% { transform: rotate(0deg) scale(1); }
-          25% { transform: rotate(90deg) scale(1.1) translateY(-10px); }
-          50% { transform: rotate(180deg) scale(1) translateY(0); }
-          75% { transform: rotate(270deg) scale(1.1) translateY(-10px); }
-          100% { transform: rotate(360deg) scale(1) translateY(0); }
+        @keyframes dice-shake {
+          0%, 100% { transform: translate(0, 0) rotate(0); }
+          25% { transform: translate(-2px, -2px) rotate(-5deg); }
+          50% { transform: translate(2px, 1px) rotate(5deg); }
+          75% { transform: translate(-1px, 2px) rotate(-3deg); }
         }
 
-        @keyframes dice-settle {
-          0% { transform: scale(1.3) rotate(15deg); }
-          50% { transform: scale(0.9) rotate(-5deg); }
-          100% { transform: scale(1) rotate(0deg); }
+        @keyframes dice-pop {
+          0% { transform: scale(1.2); }
+          100% { transform: scale(1); }
         }
 
         @keyframes text-flicker-glow {
@@ -133,11 +131,11 @@
         }
 
         .animate-dice-tumble {
-          animation: dice-tumble 0.2s infinite linear;
+          animation: dice-shake 0.1s infinite;
         }
 
         .animate-dice-settle {
-          animation: dice-settle 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+          animation: dice-pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
 
         .animate-confetti-fall {

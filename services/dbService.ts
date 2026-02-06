@@ -116,8 +116,9 @@ export const dbService = {
       const user = await dbService.findPlayerGlobal(username);
       if (user && user.id) {
         let coinBonus = 0;
-        if (isWin && !isBotGame) {
-          coinBonus = 10;
+        if (isWin) {
+          // New: Win against bot gives 5 coins, human gives 10
+          coinBonus = isBotGame ? 5 : 10;
         }
 
         const fields: any = {
