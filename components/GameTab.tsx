@@ -492,6 +492,7 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
         setVisualGuestPos(result.game.guestPos); 
         setCurrentVisualTurn(result.game.turn);
         setTurnStartTime(Date.now());
+        setInputCode(''); // Clear the code box upon successful join
       } else setFeedback({ type: 'error', message: 'Invalid Code' });
     } catch (e) { setFeedback({ type: 'error', message: 'Join failed.' }); }
     finally { setLoading(false); }
@@ -630,8 +631,19 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
                     <h3 className="text-[10px] font-black text-indigo-200 uppercase tracking-[0.4em]">Join Arena</h3>
                   </div>
                   <div className="relative flex items-center">
-                    <input type="text" maxLength={4} value={inputCode} onChange={(e) => setInputCode(e.target.value.replace(/\D/g, ''))} placeholder="CODE" className="flex-1 bg-[#020617]/90 rounded-[1.8rem] border border-white/10 px-6 py-4 text-white font-black tracking-[0.5em] outline-none focus:border-indigo-400" />
-                    <button onClick={joinGame} disabled={loading || inputCode.length !== 4} className={`ml-3 w-11 h-11 rounded-2xl flex items-center justify-center border border-white/20 ${inputCode.length === 4 ? 'bg-indigo-500 text-white shadow-lg' : 'bg-slate-900 text-slate-700 opacity-60'}`}>
+                    <input 
+                      type="text" 
+                      maxLength={4} 
+                      value={inputCode} 
+                      onChange={(e) => setInputCode(e.target.value.replace(/\D/g, ''))} 
+                      placeholder="CODE" 
+                      className="w-full bg-[#020617]/90 rounded-[1.8rem] border border-white/10 px-6 pr-14 py-4 text-white font-black tracking-[0.5em] outline-none focus:border-indigo-400" 
+                    />
+                    <button 
+                      onClick={joinGame} 
+                      disabled={loading || inputCode.length !== 4} 
+                      className={`absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-2xl flex items-center justify-center border border-white/20 transition-all ${inputCode.length === 4 ? 'bg-indigo-500 text-white shadow-lg' : 'bg-slate-900 text-slate-700 opacity-60'}`}
+                    >
                       {loading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={18} strokeWidth={4} />}
                     </button>
                   </div>
@@ -737,7 +749,7 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
         {game.winner ? (
           <button onClick={() => setGame(null)} className="w-full max-w-[280px] bg-white text-black font-black py-4 rounded-2xl shadow-xl active:scale-95 uppercase tracking-widest text-xs ring-2 ring-indigo-500/50 flex items-center justify-center gap-3"><LogOut size={18} /> Back to Lobby</button>
         ) : (
-          <div className="flex flex-col items-center gap-4 w-full max-w-sm">
+          <div className="flex flex-col items-center gap-4 w-full max-sm:w-full max-w-sm">
             {game.guestId && (
               <div className="flex flex-col items-center gap-3 w-full">
                 <div className="flex gap-2 p-1.5 bg-slate-900/60 backdrop-blur-2xl border border-white/20 rounded-[2rem] shadow-2xl px-3 overflow-x-auto no-scrollbar">

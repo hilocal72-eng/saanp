@@ -53,6 +53,8 @@ const parseGame = (record: any): GameState => {
     guestId: guestId,
     hostPos: Number(f.hostPos) || 1,
     guestPos: Number(f.guestPos) || 1,
+    hostLandingPos: f.hostLandingPos !== undefined ? Number(f.hostLandingPos) : undefined,
+    guestLandingPos: f.guestLandingPos !== undefined ? Number(f.guestLandingPos) : undefined,
     turn: (f.turn === 'guest' ? 'guest' : 'host') as 'host' | 'guest',
     winner: f.winner ? String(f.winner) : undefined,
     lastDice: Number(f.lastDice) || 0,
@@ -117,7 +119,6 @@ export const dbService = {
       if (user && user.id) {
         let coinBonus = 0;
         if (isWin) {
-          // New: Win against bot gives 5 coins, human gives 10
           coinBonus = isBotGame ? 5 : 10;
         }
 
@@ -278,6 +279,8 @@ export const dbService = {
       guestId: isBotGame ? "FoxyBot" : "",
       hostPos: 1, 
       guestPos: 1, 
+      hostLandingPos: 1,
+      guestLandingPos: 1,
       turn: 'host', 
       lastDice: 0, 
       hostLastDice: 0, 
@@ -311,6 +314,8 @@ export const dbService = {
       guestId: game.guestId || "", 
       hostPos: game.hostPos, 
       guestPos: game.guestPos, 
+      hostLandingPos: game.hostLandingPos || 1,
+      guestLandingPos: game.guestLandingPos || 1,
       turn: game.turn, 
       winner: game.winner || "", 
       lastDice: game.lastDice, 

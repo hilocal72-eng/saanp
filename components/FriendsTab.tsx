@@ -32,6 +32,13 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
     return saved ? JSON.parse(saved) : {};
   });
 
+  const formatTime = (ts: number) => {
+    const date = new Date(ts);
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
+
   const handleScroll = () => {
     if (!chatContainerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
@@ -278,16 +285,18 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
           <div 
             ref={chatContainerRef}
             onScroll={handleScroll}
-            className="flex-1 overflow-y-auto p-6 space-y-4 pb-72 scroll-smooth"
+            className="flex-1 overflow-y-auto p-6 space-y-6 pb-72 scroll-smooth"
           >
             {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center mt-20"><p className="font-black text-[10px] uppercase tracking-widest text-slate-100 opacity-60">Say hello!</p></div>
             ) : (
               messages.map((m) => {
                 const isMe = m.senderId === myProfile.name;
+                const timeStr = formatTime(m.timestamp);
                 return (
-                  <div key={m.id || m.timestamp} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2`}>
+                  <div key={m.id || m.timestamp} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} animate-in slide-in-from-bottom-2`}>
                     <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-xs font-bold ${isMe ? 'bg-indigo-600 text-white rounded-tr-none shadow-lg border border-white/10' : 'bg-slate-900 text-slate-100 rounded-tl-none border border-slate-700'}`}>{m.text}</div>
+                    <span className="text-[7px] font-black uppercase tracking-widest text-slate-500 mt-1 px-1">{timeStr}</span>
                   </div>
                 );
               })

@@ -66,6 +66,7 @@ const MarketTab: React.FC<MarketTabProps> = ({ myProfile, onProfileUpdate }) => 
             <div>
               <h1 className="text-2xl font-black text-white uppercase italic tracking-tighter leading-none">Loot Shop</h1>
               <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest mt-1.5">Premium Stickers</p>
+              <p className="text-[7px] font-black text-white/70 uppercase tracking-[0.2em] mt-1 animate-pulse">Win Games to Earn coins</p>
             </div>
           </div>
           <div className="bg-slate-900 border border-amber-500/30 px-4 py-2.5 rounded-2xl flex items-center gap-2 shadow-xl">

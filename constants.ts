@@ -36,125 +36,126 @@ export interface Sticker {
 }
 
 // STICKERS provides a collection of purchaseable items for the MarketTab.
+// Prices updated to range between 50 and 100.
 export const STICKERS: Sticker[] = [
   {
     id: 'Hi',
     name: 'Hi',
-    price: 100,
+    price: 50,
     image: 'https://cdn-icons-png.flaticon.com/256/7075/7075106.png'
   },
   {
     id: 'No',
     name: 'No',
-    price: 200,
+    price: 60,
     image: 'https://cdn-icons-png.flaticon.com/256/7075/7075109.png'
   },
   {
     id: 'Break',
     name: 'Need Break !',
-    price: 250,
+    price: 75,
     image: 'https://cdn-icons-png.flaticon.com/256/7418/7418828.png'
   },
   {
     id: 'Suprise ',
     name: 'Suprise ',
-    price: 500,
+    price: 90,
     image: 'https://cdn-icons-png.flaticon.com/256/9217/9217826.png'
   },
   {
     id: 'Hello',
     name: 'Hello',
-    price: 300,
+    price: 80,
     image: 'https://cdn-icons-png.flaticon.com/256/6143/6143312.png'
   },
   {
     id: 'Angry ',
     name: 'Angry ',
-    price: 200,
+    price: 55,
     image: 'https://cdn-icons-png.flaticon.com/256/7075/7075100.png'
   },
   {
     id: 'Miss You',
     name: 'Miss You',
-    price: 100,
+    price: 50,
     image: 'https://cdn-icons-png.flaticon.com/256/8771/8771565.png'
   },
   {
     id: 'Bandage sticker',
     name: 'Bandage sticker',
-    price: 100,
+    price: 50,
     image: 'https://cdn-icons-png.flaticon.com/256/8771/8771678.png'
   },
   {
     id: 'Break up ',
     name: 'Break up ',
-    price: 150,
+    price: 65,
     image: 'https://cdn-icons-png.flaticon.com/256/6084/6084739.png'
   },
   {
     id: 'Flowers',
     name: 'Flowers',
-    price: 150,
+    price: 70,
     image: 'https://cdn-icons-png.flaticon.com/256/6843/6843610.png'
   },
   {
     id: 'In love ',
     name: 'In love ',
-    price: 300,
+    price: 85,
     image: 'https://cdn-icons-png.flaticon.com/256/10443/10443856.png'
   },
   {
     id: 'Girl ',
     name: 'Girl ',
-    price: 200,
+    price: 60,
     image: 'https://cdn-icons-png.flaticon.com/256/7409/7409945.png'
   },
   {
     id: 'Lets_Dance',
     name: "Let's Dance",
-    price: 100,
+    price: 50,
     image: 'https://cdn-icons-png.flaticon.com/256/7592/7592472.png'
   },
   {
     id: 'Thinking ',
     name: 'Thinking ',
-    price: 200,
+    price: 75,
     image: 'https://cdn-icons-png.flaticon.com/256/6437/6437442.png'
   },
   {
     id: 'Yes !',
     name: 'Yes !',
-    price: 250,
+    price: 80,
     image: 'https://cdn-icons-png.flaticon.com/256/6431/6431343.png'
   },
   {
     id: 'No_alt',
     name: 'No',
-    price: 150,
+    price: 60,
     image: 'https://cdn-icons-png.flaticon.com/256/7075/7075109.png'
   },
   {
     id: 'Happy birthday ',
     name: 'Happy birthday ',
-    price: 200,
+    price: 95,
     image: 'https://cdn-icons-png.flaticon.com/256/10943/10943968.png'
   },
   {
     id: 'Shock ',
     name: 'Shock ',
-    price: 200,
+    price: 80,
     image: 'https://cdn-icons-png.flaticon.com/256/7641/7641912.png'
   },
   {
     id: 'Sleep ',
     name: 'Sleep ',
-    price: 100,
+    price: 50,
     image: 'https://cdn-icons-png.flaticon.com/256/9754/9754991.png'
   },
   {
     id: 'WTF ?',
     name: 'WTF ?',
-    price: 200,
+    price: 100,
     image: 'https://cdn-icons-png.flaticon.com/256/4524/4524559.png'
   }
 ];
