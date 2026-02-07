@@ -2,12 +2,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { UserProfile, Gender } from '../types';
 import { dbService } from '../services/dbService';
-import { STICKERS } from '../constants';
+import { STICKERS, SOUNDS } from '../constants';
 import { 
   User, Copy, AlertTriangle, PartyPopper, Sparkles, 
   LogIn, UserPlus, LogOut, Swords, TrendingUp, Trophy, KeyRound, 
   Eye, EyeOff, RefreshCw, Loader2, X, Scissors, Pencil, Coins,
-  Smile, LayoutGrid, Star
+  Smile, LayoutGrid, Star, CheckCircle2
 } from 'lucide-react';
 
 interface ProfileTabProps {
@@ -214,7 +214,8 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
       } else {
         const profile: UserProfile = { name: trimmedName, pin, gender, uniqueId: trimmedName };
         const saved = await dbService.saveProfile(profile);
-        onProfileUpdate(saved); setShowSuccess(true);
+        onProfileUpdate(saved); 
+        setShowSuccess(true);
       }
     } catch (e: any) { setError(e.message.includes('USERNAME_TAKEN') ? 'Username Taken' : 'Error Occurred'); }
     finally { setSaving(false); }
@@ -241,11 +242,51 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
         {tempImage && <CropModal imageSrc={tempImage} onConfirm={handleCropConfirm} onCancel={() => setTempImage(null)} />}
         
         {showSuccess && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-xl animate-in fade-in duration-300">
-            <div className="bg-slate-900 border border-indigo-500/30 p-10 rounded-[2.5rem] text-center max-w-xs w-full shadow-2xl">
-              <div className="w-20 h-20 bg-indigo-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-indigo-900/40"><PartyPopper size={40} className="text-white" /></div>
-              <h2 className="text-3xl font-black text-white uppercase tracking-tighter leading-tight">{mode === 'login' ? 'Welcome Back!' : 'Congrats!'}</h2>
-              <button onClick={() => setShowSuccess(false)} className="mt-10 w-full bg-white text-black font-black py-4 rounded-2xl active:scale-95 transition-all text-sm tracking-widest uppercase">START QUEST</button>
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-950/95 backdrop-blur-2xl animate-in fade-in duration-500">
+            <div className="bg-slate-900 border border-indigo-500/30 p-10 rounded-[3rem] text-center max-w-[340px] w-full shadow-[0_0_100px_rgba(79,70,229,0.4)] relative overflow-hidden group">
+              <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-indigo-500/10 via-transparent to-amber-500/10" />
+                <div className="absolute -top-10 -right-10 w-40 h-40 bg-indigo-600/20 blur-[60px] rounded-full animate-pulse" />
+                <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-amber-600/20 blur-[60px] rounded-full" />
+              </div>
+
+              <div className="relative z-10">
+                <div className="w-24 h-24 bg-gradient-to-tr from-indigo-600 to-indigo-400 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-[0_15px_40px_rgba(79,70,229,0.5)] border border-white/20 animate-winner-zoom">
+                  {mode === 'login' ? (
+                    <PartyPopper size={48} className="text-white" />
+                  ) : (
+                    <Coins size={48} className="text-white animate-bounce" />
+                  )}
+                </div>
+
+                <h2 className="text-3xl font-black text-white uppercase tracking-tighter leading-[0.9] mb-4 drop-shadow-md">
+                  {mode === 'login' ? 'WELCOME BACK' : 'CONGRATULATIONS'}
+                </h2>
+
+                {mode === 'create' ? (
+                  <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-700 delay-200">
+                    <p className="text-[11px] font-black text-indigo-200 uppercase tracking-widest leading-relaxed">
+                      You have been credited with
+                    </p>
+                    <div className="flex items-center justify-center gap-2 py-3 px-6 bg-amber-500/20 border border-amber-500/40 rounded-2xl shadow-inner ring-1 ring-white/10 group-hover:scale-110 transition-transform duration-500">
+                      <Coins size={24} className="text-amber-400" strokeWidth={3} />
+                      <span className="text-3xl font-black text-white tabular-nums drop-shadow-[0_0_12px_rgba(245,158,11,0.6)]">100 COINS</span>
+                    </div>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">WELCOME GIFT FOR NEW QUESTERS</p>
+                  </div>
+                ) : (
+                  <p className="text-[11px] font-black text-slate-300 uppercase tracking-widest leading-relaxed mb-6">
+                    Ready to reclaim your spot in the arena?
+                  </p>
+                )}
+
+                <button 
+                  onClick={() => setShowSuccess(false)} 
+                  className="mt-10 w-full bg-white text-black font-black py-5 rounded-2xl active:scale-95 transition-all text-xs tracking-[0.3em] uppercase shadow-[0_10px_30px_rgba(255,255,255,0.2)] hover:bg-slate-100"
+                >
+                  START QUEST
+                </button>
+              </div>
             </div>
           </div>
         )}

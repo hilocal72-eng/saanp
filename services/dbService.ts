@@ -147,7 +147,7 @@ export const dbService = {
       lastSeen: Date.now(),
       wins: 0,
       losses: 0,
-      coins: 0,
+      coins: 100, // Welcome Bonus of 100 coins
       ownedStickers: "",
       favouriteStickers: ""
     };
@@ -157,7 +157,7 @@ export const dbService = {
       body: JSON.stringify({ records: [{ fields }] })
     });
     
-    const saved = { ...profile, id: result.records[0].id, wins: 0, losses: 0, coins: 0, ownedStickers: [], favouriteStickers: [] };
+    const saved = { ...profile, id: result.records[0].id, wins: 0, losses: 0, coins: 100, ownedStickers: [], favouriteStickers: [] };
     const db = getLocalDB();
     db.users = [saved];
     saveLocalDB(db);

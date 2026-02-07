@@ -752,6 +752,9 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
           <div className="flex flex-col items-center gap-4 w-full max-sm:w-full max-w-sm">
             {game.guestId && (
               <div className="flex flex-col items-center gap-3 w-full">
+                {favStickers.length === 0 && (
+                   <p className="text-[8px] font-black text-indigo-400 uppercase tracking-[0.3em] animate-pulse mb-1">SET FAV STICKERS IN PROFILE TO REACT!</p>
+                )}
                 <div className="flex gap-2 p-1.5 bg-slate-900/60 backdrop-blur-2xl border border-white/20 rounded-[2rem] shadow-2xl px-3 overflow-x-auto no-scrollbar">
                   {REACTIONS.map(r => (<button key={r.label} onClick={() => sendEcho(r.icon)} className="w-10 h-10 shrink-0 flex items-center justify-center rounded-2xl bg-slate-800 border border-white/5 active:scale-90"><span className="text-lg">{r.icon}</span></button>))}
                   {favStickers.length > 0 && <div className="flex gap-2 border-l border-white/10 pl-2">{favStickers.map(s => (<button key={s.id} onClick={() => sendEcho(s.image)} className="w-10 h-10 shrink-0 flex items-center justify-center rounded-2xl bg-slate-800 border border-white/5 active:scale-90"><img src={s.image} className="w-7 h-7 object-contain" alt={s.name} /></button>))}</div>}
