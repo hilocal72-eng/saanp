@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GameState, UserProfile } from '../types';
 import { dbService } from '../services/dbService';
@@ -673,9 +672,7 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
             <Sword size={12} className="text-amber-400" />
             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-400 animate-pulse text-glow-yellow">Arena #{game.code}</span>
           </div>
-          {favStickers.length === 0 && (
-            <p className="text-[7px] font-black text-indigo-400/80 uppercase tracking-[0.2em] animate-pulse mt-1">SET FAV STICKERS IN PROFILE TO REACT!</p>
-          )}
+          <p className="text-[7px] font-black text-indigo-400/90 uppercase tracking-[0.15em] animate-pulse mt-1">SET FAV STICKERS IN PROFILE TO REACT!</p>
         </div>
         <div className="flex items-center gap-3">
           <button onClick={() => setIsMuted(!isMuted)} className="p-2 bg-slate-800 rounded-lg border border-white/10 active:scale-90">{isMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}</button>
@@ -687,13 +684,13 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
         <div className="flex justify-center items-center gap-3 mb-6 mt-6 sticky top-0 z-[400] w-full">
            <div className={`px-2 py-1.5 rounded-xl border flex flex-col items-center min-w-[95px] relative transition-all duration-300 ${currentVisualTurn === 'host' ? 'bg-indigo-600 border-white scale-105 shadow-[0_0_15px_rgba(79,70,229,0.4)]' : 'bg-slate-800 border-white/10 opacity-80'}`}>
               <ReactionBubble text={game.hostReaction?.split('|')[0] || ''} visible={!!game.hostReaction && Date.now() - parseInt(game.hostReaction.split('|')[1] || '0') < ECHO_DURATION} />
-              {currentVisualTurn === 'host' && !game.winner && game.guestId && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white text-indigo-700 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-lg ring-2 ring-indigo-500/50 z-[20] animate-in slide-in-from-top-2"><Clock size={10} strokeWidth={3} className="animate-pulse" /><span className="text-[10px] font-black tabular-nums">{timeLeft}s</span></div>}
+              {currentVisualTurn === 'host' && !game.winner && game.guestId && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white text-indigo-700 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-lg ring-2 ring-indigo-500/50 z-[20] animate-in slide-in-from-top-2"><Clock size={10} strokeWidth={3} className="animate-pulse" /><span className="text-[8px] font-black tabular-nums">{timeLeft}s</span></div>}
               <span className="text-base font-black text-white leading-none">{game.hostLastDice || '-'}</span>
               <span className="text-[8px] font-black uppercase tracking-widest truncate max-w-[70px] mt-0.5">{game.hostId}</span>
            </div>
            <div className={`px-2 py-1.5 rounded-xl border flex flex-col items-center min-w-[95px] relative transition-all duration-300 ${currentVisualTurn === 'guest' ? 'bg-emerald-600 border-white scale-105 shadow-[0_0_15px_rgba(16,185,129,0.4)]' : 'bg-slate-800 border-white/10 opacity-80'}`}>
               <ReactionBubble text={game.guestReaction?.split('|')[0] || ''} visible={!!game.guestReaction && Date.now() - parseInt(game.guestReaction.split('|')[1] || '0') < ECHO_DURATION} />
-              {currentVisualTurn === 'guest' && !game.winner && game.guestId && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white text-emerald-700 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-lg ring-2 ring-emerald-500/50 z-[20] animate-in slide-in-from-top-2"><Clock size={10} strokeWidth={3} className="animate-pulse" /><span className="text-[10px] font-black tabular-nums">{timeLeft}s</span></div>}
+              {currentVisualTurn === 'guest' && !game.winner && game.guestId && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white text-emerald-700 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-lg ring-2 ring-emerald-500/50 z-[20] animate-in slide-in-from-top-2"><Clock size={10} strokeWidth={3} className="animate-pulse" /><span className="text-[8px] font-black tabular-nums">{timeLeft}s</span></div>}
               <span className="text-base font-black text-white leading-none">{game.guestLastDice || '-'}</span>
               <span className="text-[8px] font-black uppercase tracking-widest truncate max-w-[70px] mt-0.5">{game.guestId || 'WAITING'}</span>
            </div>
@@ -752,9 +749,6 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
           <div className="flex flex-col items-center gap-4 w-full max-sm:w-full max-w-sm">
             {game.guestId && (
               <div className="flex flex-col items-center gap-3 w-full">
-                {favStickers.length === 0 && (
-                   <p className="text-[8px] font-black text-indigo-400 uppercase tracking-[0.3em] animate-pulse mb-1">SET FAV STICKERS IN PROFILE TO REACT!</p>
-                )}
                 <div className="flex gap-2 p-1.5 bg-slate-900/60 backdrop-blur-2xl border border-white/20 rounded-[2rem] shadow-2xl px-3 overflow-x-auto no-scrollbar">
                   {REACTIONS.map(r => (<button key={r.label} onClick={() => sendEcho(r.icon)} className="w-10 h-10 shrink-0 flex items-center justify-center rounded-2xl bg-slate-800 border border-white/5 active:scale-90"><span className="text-lg">{r.icon}</span></button>))}
                   {favStickers.length > 0 && <div className="flex gap-2 border-l border-white/10 pl-2">{favStickers.map(s => (<button key={s.id} onClick={() => sendEcho(s.image)} className="w-10 h-10 shrink-0 flex items-center justify-center rounded-2xl bg-slate-800 border border-white/5 active:scale-90"><img src={s.image} className="w-7 h-7 object-contain" alt={s.name} /></button>))}</div>}

@@ -351,7 +351,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ onProfileUpdate, currentProfile
               </div>
               {mode === 'create' && (
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-200 uppercase tracking-[0.2em] ml-1">Avatar Type</label>
+                  <label className="text-[10px] font-black text-slate-200 uppercase tracking-[0.2em] ml-1">Gender</label>
                   <div className="grid grid-cols-2 gap-2">{(['male', 'female'] as Gender[]).map((g) => (<button key={g} onClick={() => setGender(g)} className={`py-4 rounded-2xl text-[11px] font-black transition-all border ${gender === g ? 'bg-indigo-600 text-white border-white/40 shadow-lg' : 'bg-slate-950/50 text-slate-300 border-white/20'}`}>{g.toUpperCase()}</button>))}</div>
                 </div>
               )}
