@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { GameState, UserProfile } from '../types';
+import { GameState, UserProfile, ChatMessage } from '../types';
 import { dbService } from '../services/dbService';
 import { LADDERS, SNAKES, BOARD_CELLS, STICKERS, SOUNDS } from '../constants';
 import { 
-  Trophy, Sword, Clock, Sparkles, LogOut, User, Bot, Hash, ArrowRight, Play, Zap, Loader2, Scissors, Pencil, Star, Image as ImageIcon, Volume2, VolumeX
+  Trophy, Sword, Clock, Sparkles, LogOut, User, Bot, Hash, ArrowRight, Play, Zap, Loader2, Scissors, Pencil, Star, Image as ImageIcon, Volume2, VolumeX, MessageCircle, Send, X, ChevronDown
 } from 'lucide-react';
 
 interface GameTabProps {
@@ -15,6 +16,7 @@ interface GameTabProps {
 
 const TURN_TIMEOUT_SECONDS = 60;
 const ECHO_DURATION = 4000;
+const CHAT_BANNER_DURATION = 8000;
 const SYNC_INTERVAL = 2000;
 const WALK_SPEED_MS = 250; 
 const SLIDE_SPEED_MS = 700; 
@@ -30,8 +32,23 @@ const CARTOON_SNAKES = [
   { body: '#8b5cf6', stripe: '#3b82f6' }, 
   { body: '#22c55e', stripe: '#facc15' }, 
   { body: '#f97316', stripe: '#fde047' }, 
-  { body: '#ef4444', stripe: '#ffffff' }, 
+  { body: '#ef4444', stroke: '#ffffff' }, 
 ];
+
+const generateWigglyPath = (s: { x: number, y: number }, e: { x: number, y: number }, idx: number) => {
+  const dx = e.x - s.x;
+  const dy = e.y - s.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const px = -dy / dist;
+  const py = dx / dist;
+  const wiggleFactor = 6 + (idx % 3) * 2;
+  const cp1 = { x: s.x + dx * 0.33 + px * wiggleFactor, y: s.y + dy * 0.33 + py * wiggleFactor };
+  const cp2 = { x: s.x + dx * 0.66 - px * wiggleFactor, y: s.y + dy * 0.66 - py * wiggleFactor };
+  return {
+    d: `M ${s.x} ${s.y} C ${cp1.x} ${cp1.y}, ${cp2.x} ${cp2.y}, ${e.x} ${e.y}`,
+    firstCP: cp1
+  };
+};
 
 const FirecrackerBlast = ({ delay, colorSet, xOffset = "50%", yOffset = "50%" }: { delay: string, colorSet: string[], xOffset?: string, yOffset?: string }) => {
   const sparkCount = 32;
@@ -86,7 +103,6 @@ const WinnerBannerDisplay = ({ isMe = true }: { isMe?: boolean }) => {
   const isMuted = !isMe;
   const color = isMuted ? "#475569" : "#BF953F";
   const lightColor = isMuted ? "#94a3b8" : "#FCF6BA";
-
   return (
     <div className="relative flex flex-col items-center justify-center scale-110 sm:scale-125">
       <svg width="240" height="240" viewBox="0 0 200 200" className="overflow-visible">
@@ -129,7 +145,6 @@ const WinnerBannerDisplay = ({ isMe = true }: { isMe?: boolean }) => {
 
 const BoardCelebration = ({ winnerName, isMe }: { winnerName: string, isMe: boolean }) => {
   const fireworkColors = ['#ffffff', '#fef08a', '#fbbf24', '#facc15', '#ef4444', '#3b82f6'];
-
   return (
     <div className="absolute inset-0 pointer-events-none z-[120] flex items-center justify-center bg-[#020d1a]/85 backdrop-blur-[1.5px] overflow-hidden rounded-lg">
       {isMe && (
@@ -153,17 +168,17 @@ const BoardCelebration = ({ winnerName, isMe }: { winnerName: string, isMe: bool
   );
 };
 
-const ReactionBubble: React.FC<{ text: string, visible: boolean }> = ({ text, visible }) => {
-  if (!visible || !text) return null;
-  const isImage = text.startsWith('http');
-  
+const ReactionBubble: React.FC<{ reactionStr: string, visible: boolean }> = ({ reactionStr, visible }) => {
+  if (!visible || !reactionStr) return null;
+  const content = reactionStr.split('|')[0];
+  const isImage = content.startsWith('http');
   return (
     <div className="absolute inset-0 flex items-center justify-center z-[500] pointer-events-none overflow-visible">
       <div className="animate-reaction-pop drop-shadow-[0_0_15px_rgba(255,255,255,0.8)] select-none">
         {isImage ? (
-          <img src={text} className="w-16 h-16 object-contain" alt="Reaction" />
+          <img src={content} className="w-16 h-16 object-contain" alt="Reaction" />
         ) : (
-          <span className="text-3xl">{text}</span>
+          <span className="text-3xl">{content}</span>
         )}
       </div>
     </div>
@@ -224,9 +239,12 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
   const [turnStartTime, setTurnStartTime] = useState<number>(Date.now());
   const [isMuted, setIsMuted] = useState(false);
   
-  // Persistent Visual Turn focus for 'Final Landing' logic
+  const [chatText, setChatText] = useState('');
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [visibleBanner, setVisibleBanner] = useState<{ text: string, sender: string } | null>(null);
+  const lastProcessedChatTsRef = useRef<number>(Date.now());
+
   const [currentVisualTurn, setCurrentVisualTurn] = useState<'host' | 'guest'>(game?.turn || 'host');
-  
   const gameRef = useRef<GameState | null>(game);
   const audioRefs = useRef<Record<string, HTMLAudioElement>>({});
   const lastSyncTimeRef = useRef<number>(0);
@@ -249,6 +267,25 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
   }, [isMuted]);
 
   const favStickers = STICKERS.filter(s => myProfile?.favouriteStickers?.includes(s.id));
+
+  useEffect(() => {
+    if (!game || !game.guestId || game.isBotGame || !myProfile) return;
+    const opponentId = game.hostId === myProfile.uniqueId ? game.guestId : game.hostId;
+    const interval = setInterval(async () => {
+      try {
+        const messages = await dbService.getMessages(myProfile.uniqueId, opponentId);
+        if (messages.length > 0) {
+          const latest = messages[messages.length - 1];
+          if (latest.timestamp > lastProcessedChatTsRef.current) {
+            lastProcessedChatTsRef.current = latest.timestamp;
+            setVisibleBanner({ sender: latest.senderId, text: latest.text });
+            setTimeout(() => setVisibleBanner(null), CHAT_BANNER_DURATION);
+          }
+        }
+      } catch (e) { console.debug("Chat sync failed"); }
+    }, 4000); 
+    return () => clearInterval(interval);
+  }, [game?.id, game?.guestId, game?.isBotGame, myProfile?.uniqueId]);
 
   useEffect(() => { 
     gameRef.current = game;
@@ -296,10 +333,7 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
         const isHostTurn = game.turn === 'host';
         const winnerId = isHostTurn ? game.guestId! : game.hostId;
         const isMeWinning = winnerId === myProfile?.uniqueId;
-        
-        // Timeout win - play sound immediately as there is no movement to finish line
         playSound(isMeWinning ? 'WIN' : 'LOSS');
-        
         const update = { ...game, winner: winnerId, lastUpdated: Date.now() };
         setGame(update);
         if (!game.isBotGame) await dbService.updateGame(update);
@@ -318,50 +352,26 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
 
   const handleQuit = async () => {
     if (!game || !myProfile) return;
-    
-    // If the game is already finished, "Quit" (header button) just acts as Return to Lobby
-    if (game.winner) {
-      setGame(null);
-      return;
-    }
-
-    // Handle Active Forfeit
+    if (game.winner) { setGame(null); return; }
     if (game.guestId) {
       const isHost = game.hostId === myProfile.uniqueId;
       const opponentId = isHost ? game.guestId : game.hostId;
-      
       const update = { ...game, winner: opponentId, lastUpdated: Date.now() };
-      
-      // Update state immediately to show the Result Screen (Loss)
       setGame(update);
       playSound('LOSS');
-
-      // Update backend only for real games
       if (!game.isBotGame) {
-        try {
-          await dbService.updateGame(update);
-        } catch (e) { console.error("Forfeit sync failed", e); }
+        try { await dbService.updateGame(update); } catch (e) { console.error("Forfeit sync failed", e); }
       }
-      
-      // Record the loss in stats
       await dbService.incrementStats(myProfile.uniqueId, false, !!game.isBotGame);
-    } else {
-      // If quitting before game even starts (waiting for opponent), just exit
-      setGame(null);
-    }
+    } else { setGame(null); }
   };
 
-  // Movement Effect: Updated to trigger Visual Turn shift on 'Final Landing'
   useEffect(() => {
     if (!game || isHopping || isSpecialMove || rolling) return;
-
     const targetHost = game.hostPos;
     const targetGuest = game.guestPos;
-
-    // Derived landing positions for local animation
     let landHost = game.hostLandingPos || targetHost;
     let landGuest = game.guestLandingPos || targetGuest;
-
     if (visualHostPos !== targetHost && !game.hostLandingPos) {
        landHost = Math.min(BOARD_CELLS, visualHostPos + (game.hostLastDice || game.lastDice || 0));
        if (landHost > BOARD_CELLS) landHost = visualHostPos;
@@ -370,14 +380,10 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
        landGuest = Math.min(BOARD_CELLS, visualGuestPos + (game.guestLastDice || game.lastDice || 0));
        if (landGuest > BOARD_CELLS) landGuest = visualGuestPos;
     }
-
-    // FINAL LANDING LOGIC
     if (visualHostPos === targetHost && visualGuestPos === targetGuest) {
       if (isAnimating) {
         setIsAnimating(false);
         setCurrentVisualTurn(game.turn); 
-        
-        // Play win/loss sound when pawn physically lands on 100
         if (targetHost === 100 || targetGuest === 100) {
           if (game.winner && myProfile) {
             playSound(game.winner === myProfile.uniqueId ? 'WIN' : 'LOSS');
@@ -386,46 +392,26 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
       }
       return;
     }
-
     setIsAnimating(true);
     if (visualHostPos !== targetHost) setCurrentVisualTurn('host');
     else if (visualGuestPos !== targetGuest) setCurrentVisualTurn('guest');
-
-    const moveStep = (
-      current: number, 
-      landing: number, 
-      target: number, 
-      player: 'host' | 'guest', 
-      setter: React.Dispatch<React.SetStateAction<number>>
-    ) => {
-      if (current !== landing) {
-        const nextCell = current < landing ? current + 1 : current - 1;
-        setIsHopping(player);
+    const moveStep = (c: number, l: number, t: number, p: 'host' | 'guest', s: React.Dispatch<React.SetStateAction<number>>) => {
+      if (c !== l) {
+        const nextCell = c < l ? c + 1 : c - 1;
+        setIsHopping(p);
         playSound('MOVE');
-        setTimeout(() => {
-          setter(nextCell);
-          setIsHopping(null);
-        }, WALK_SPEED_MS);
-      } 
-      else if (landing !== target) {
-        setIsSpecialMove(player);
-        const isSnake = target < landing;
+        setTimeout(() => { s(nextCell); setIsHopping(null); }, WALK_SPEED_MS);
+      } else if (l !== t) {
+        setIsSpecialMove(p);
+        const isSnake = t < l;
         playSound(isSnake ? 'SNAKE' : 'LADDER');
-        setTimeout(() => {
-           setter(target);
-           setIsSpecialMove(null);
-        }, SLIDE_SPEED_MS);
+        setTimeout(() => { s(t); setIsSpecialMove(null); }, SLIDE_SPEED_MS);
       }
     };
-
     const timer = setTimeout(() => {
-      if (visualHostPos !== targetHost) {
-        moveStep(visualHostPos, landHost, targetHost, 'host', setVisualHostPos);
-      } else if (visualGuestPos !== targetGuest) {
-        moveStep(visualGuestPos, landGuest, targetGuest, 'guest', setVisualGuestPos);
-      }
+      if (visualHostPos !== targetHost) moveStep(visualHostPos, landHost, targetHost, 'host', setVisualHostPos);
+      else if (visualGuestPos !== targetGuest) moveStep(visualGuestPos, landGuest, targetGuest, 'guest', setVisualGuestPos);
     }, 50);
-
     return () => clearTimeout(timer);
   }, [visualHostPos, visualGuestPos, game?.hostPos, game?.guestPos, game?.hostLandingPos, game?.guestLandingPos, game?.lastDice, game?.hostLastDice, game?.guestLastDice, game?.turn, game?.winner, isHopping, isSpecialMove, rolling, playSound, isAnimating, myProfile]);
 
@@ -440,13 +426,9 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
           if (!current || current.id !== remote.id) return;
           if (remote.lastUpdated && remote.lastUpdated > lastSyncTimeRef.current) {
             lastSyncTimeRef.current = remote.lastUpdated;
-            
-            // Handle forfeit/quit sound: if winner declared but no movement involved
             if (remote.winner && !current.winner) {
                const noMovementToGoal = (remote.hostPos !== 100 && remote.guestPos !== 100);
-               if (noMovementToGoal) {
-                 playSound(remote.winner === myProfile.uniqueId ? 'WIN' : 'LOSS');
-               }
+               if (noMovementToGoal) { playSound(remote.winner === myProfile.uniqueId ? 'WIN' : 'LOSS'); }
             }
             setGame(remote);
           }
@@ -465,17 +447,27 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
     if (!game.isBotGame) await dbService.updateGame(update);
   };
 
+  const sendChatMessage = async () => {
+    if (!game || !myProfile || !chatText.trim() || !game.guestId) return;
+    const opponentId = game.hostId === myProfile.uniqueId ? game.guestId : game.hostId;
+    const msg: ChatMessage = { id: '', senderId: myProfile.uniqueId, receiverId: opponentId, text: chatText.trim(), timestamp: Date.now() };
+    try {
+      await dbService.sendMessage(msg);
+      setVisibleBanner({ sender: myProfile.uniqueId, text: chatText.trim() });
+      setTimeout(() => setVisibleBanner(null), CHAT_BANNER_DURATION);
+      lastProcessedChatTsRef.current = msg.timestamp;
+      setChatText('');
+      setIsChatOpen(false); 
+    } catch (e) { console.error("Failed to send message", e); }
+  };
+
   const createGame = async (isBot: boolean = false) => {
     if (!myProfile) return;
     setLoading(true);
     try {
       const code = Math.floor(1000 + Math.random() * 9000).toString();
       const newGame = await dbService.hostGame(myProfile.uniqueId, myProfile.avatarUrl, code, isBot);
-      setGame(newGame);
-      setVisualHostPos(1);
-      setVisualGuestPos(1);
-      setCurrentVisualTurn('host');
-      setTurnStartTime(Date.now());
+      setGame(newGame); setVisualHostPos(1); setVisualGuestPos(1); setCurrentVisualTurn('host'); setTurnStartTime(Date.now());
     } catch (e) { setFeedback({ type: 'error', message: 'Hosting failed.' }); }
     finally { setLoading(false); }
   };
@@ -485,14 +477,8 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
     setLoading(true);
     try {
       const result = await dbService.joinGame(myProfile.uniqueId, myProfile.avatarUrl, inputCode);
-      if (result.game) { 
-        setGame(result.game); 
-        setVisualHostPos(result.game.hostPos); 
-        setVisualGuestPos(result.game.guestPos); 
-        setCurrentVisualTurn(result.game.turn);
-        setTurnStartTime(Date.now());
-        setInputCode(''); // Clear the code box upon successful join
-      } else setFeedback({ type: 'error', message: 'Invalid Code' });
+      if (result.game) { setGame(result.game); setVisualHostPos(result.game.hostPos); setVisualGuestPos(result.game.guestPos); setCurrentVisualTurn(result.game.turn); setTurnStartTime(Date.now()); setInputCode(''); }
+      else setFeedback({ type: 'error', message: 'Invalid Code' });
     } catch (e) { setFeedback({ type: 'error', message: 'Join failed.' }); }
     finally { setLoading(false); }
   };
@@ -500,61 +486,32 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
   const rollDice = async () => {
     const currentG = gameRef.current;
     if (!currentG || rolling || isAnimating || currentG.winner || !myProfile) return;
-    
-    setRolling(true);
-    setIsAnimating(true);
-    setCurrentVisualTurn(currentG.turn); 
-
+    setRolling(true); setIsAnimating(true); setCurrentVisualTurn(currentG.turn); 
     const diceValue = Math.floor(Math.random() * 6) + 1;
-    const frames = 6;
-    for (let i = 0; i < frames; i++) {
-      setRollingDiceValue(Math.floor(Math.random() * 6) + 1);
-      await new Promise(r => setTimeout(r, 80));
-    }
+    for (let i = 0; i < 6; i++) { setRollingDiceValue(Math.floor(Math.random() * 6) + 1); await new Promise(r => setTimeout(r, 80)); }
     setRollingDiceValue(diceValue);
-    
     const isHostTurn = currentG.turn === 'host';
     const currentPos = isHostTurn ? currentG.hostPos : currentG.guestPos;
-    
     let landing = currentPos + diceValue;
     if (landing > BOARD_CELLS) landing = currentPos;
-    
     const finalPos = LADDERS[landing] || SNAKES[landing] || landing;
     const winnerId = finalPos === BOARD_CELLS ? (isHostTurn ? currentG.hostId : currentG.guestId!) : undefined;
-    
     const timestamp = Date.now();
     const update: GameState = { 
-      ...currentG, 
-      hostPos: isHostTurn ? finalPos : currentG.hostPos, 
-      guestPos: !isHostTurn ? finalPos : currentG.guestPos, 
-      hostLandingPos: isHostTurn ? landing : currentG.hostLandingPos,
-      guestLandingPos: !isHostTurn ? landing : currentG.guestLandingPos,
-      lastDice: diceValue, 
-      hostLastDice: isHostTurn ? diceValue : (currentG.hostLastDice || 0), 
-      guestLastDice: !isHostTurn ? diceValue : (currentG.guestLastDice || 0), 
-      turn: (currentG.turn === 'host' ? 'guest' : 'host') as any, 
-      winner: winnerId, 
-      lastUpdated: timestamp
+      ...currentG, hostPos: isHostTurn ? finalPos : currentG.hostPos, guestPos: !isHostTurn ? finalPos : currentG.guestPos, 
+      hostLandingPos: isHostTurn ? landing : currentG.hostLandingPos, guestLandingPos: !isHostTurn ? landing : currentG.guestLandingPos,
+      lastDice: diceValue, hostLastDice: isHostTurn ? diceValue : (currentG.hostLastDice || 0), guestLastDice: !isHostTurn ? diceValue : (currentG.guestLastDice || 0), 
+      turn: (currentG.turn === 'host' ? 'guest' : 'host') as any, winner: winnerId, lastUpdated: timestamp
     };
-    
-    lastSyncTimeRef.current = timestamp;
-    setGame(update);
+    lastSyncTimeRef.current = timestamp; setGame(update);
     if (!currentG.isBotGame) await dbService.updateGame(update);
-    
-    if (winnerId && myProfile) {
-      await dbService.incrementStats(myProfile.uniqueId, winnerId === myProfile.uniqueId, !!currentG.isBotGame);
-    }
-    
-    setTimeout(() => {
-      setRolling(false);
-    }, 400);
+    if (winnerId && myProfile) { await dbService.incrementStats(myProfile.uniqueId, winnerId === myProfile.uniqueId, !!currentG.isBotGame); }
+    setTimeout(() => { setRolling(false); }, 400);
   };
 
   const getCellCoords = (cell: number) => {
-    const row = Math.floor((cell - 1) / 10);
-    const col = (cell - 1) % 10;
-    const x = (row % 2 === 0 ? col : 9 - col) * 10 + 5;
-    const y = (9 - row) * 10 + 5;
+    const row = Math.floor((cell - 1) / 10), col = (cell - 1) % 10;
+    const x = (row % 2 === 0 ? col : 9 - col) * 10 + 5, y = (9 - row) * 10 + 5;
     return { x, y };
   };
 
@@ -563,30 +520,11 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
     for (let row = 9; row >= 0; row--) {
       const isReverseRow = row % 2 !== 0;
       for (let col = 0; col < 10; col++) {
-        const actualCol = isReverseRow ? 9 - col : col;
-        const cellNum = row * 10 + actualCol + 1;
-        cells.push(
-          <div key={cellNum} className="relative flex items-center justify-center border-[0.5px] border-black/10 bg-white" style={{ width: '10%', aspectRatio: '1/1' }}>
-            <span className="absolute top-0.5 left-1 text-[9px] sm:text-[11px] font-black text-black select-none leading-none z-[50] pointer-events-none">{cellNum}</span>
-          </div>
-        );
+        const actualCol = isReverseRow ? 9 - col : col, cellNum = row * 10 + actualCol + 1;
+        cells.push(<div key={cellNum} className="relative flex items-center justify-center border-[0.5px] border-black/10 bg-white" style={{ width: '10%', aspectRatio: '1/1' }}><span className="absolute top-0.5 left-1 text-[9px] sm:text-[11px] font-black text-black select-none leading-none z-[50] pointer-events-none">{cellNum}</span></div>);
       }
     }
     return cells;
-  };
-
-  const generateWigglyPath = (s: {x: number, y: number}, e: {x: number, y: number}, idx: number) => {
-    const dx = e.x - s.x, dy = e.y - s.y, len = Math.sqrt(dx * dx + dy * dy);
-    const nx = -dy / len, ny = dx / len, segments = 4, amp = 3.5 + (idx % 2);
-    let d = `M ${s.x} ${s.y}`;
-    for (let i = 1; i <= segments; i++) {
-      const t = i / segments, prevT = (i - 1) / segments, midT = (t + prevT) / 2;
-      const targetX = s.x + dx * t, targetY = s.y + dy * t;
-      const offset = (i % 2 === 0 ? 1 : -1) * amp;
-      const cpX = s.x + dx * midT + nx * offset, cpY = s.y + dy * midT + ny * offset;
-      d += ` Q ${cpX} ${cpY} ${targetX} ${targetY}`;
-    }
-    return { d, firstCP: {x: s.x + dx * 0.125 + nx * -amp, y: s.y + dy * 0.125 + ny * -amp} };
   };
 
   if (!game) {
@@ -602,49 +540,19 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
             </div>
             <div className="relative flex flex-col items-center select-none">
               <h1 className="text-7xl font-black tracking-[-0.08em] uppercase italic leading-[0.6] font-righteous text-arena-title animate-title-float">ARENA</h1>
-              <div className="mt-2 flex items-center gap-3">
-                <div className="h-px w-10 bg-indigo-500/50" />
-                <h2 className="text-3xl font-black text-indigo-400 tracking-[0.2em] uppercase italic leading-tight font-righteous animate-subtitle-pulse">BATTLE</h2>
-                <div className="h-px w-10 bg-indigo-500/50" />
-              </div>
+              <div className="mt-2 flex items-center gap-3"><div className="h-px w-10 bg-indigo-500/50" /><h2 className="text-3xl font-black text-indigo-400 tracking-[0.2em] uppercase italic leading-tight font-righteous animate-subtitle-pulse">BATTLE</h2><div className="h-px w-10 bg-indigo-500/50" /></div>
             </div>
           </div>
           <div className="w-full flex flex-col gap-10 items-center px-4 mb-16 relative">
-            <button disabled={loading} onClick={() => createGame(false)} className="w-[220px] -translate-x-12 bg-slate-900/40 backdrop-blur-3xl border border-indigo-500/30 rounded-full h-16 transition-all hover:scale-105 active:scale-95 animate-float-x">
-              <div className="flex items-center gap-4 px-6 h-full">
-                <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white border border-white/20 shadow-[0_0_15px_rgba(79,70,229,0.8)]"><Sword size={18} /></div>
-                <span className="text-xs font-black text-white uppercase italic tracking-widest drop-shadow-md text-glow-indigo">HOST ARENA</span>
-              </div>
-            </button>
-            <button disabled={loading} onClick={() => createGame(true)} className="w-[220px] translate-x-12 bg-slate-900/40 backdrop-blur-3xl border border-emerald-500/30 rounded-full h-16 transition-all hover:scale-105 active:scale-95 animate-float-x-delayed">
-              <div className="flex items-center gap-4 px-6 h-full">
-                <div className="w-9 h-9 bg-emerald-600 rounded-xl flex items-center justify-center text-white border border-white/20 shadow-[0_0_15px_rgba(16,185,129,0.8)]"><Bot size={18} /></div>
-                <span className="text-xs font-black text-white uppercase italic tracking-widest drop-shadow-md text-glow-emerald">BATTLE WITH AI</span>
-              </div>
-            </button>
+            <button disabled={loading} onClick={() => createGame(false)} className="w-[220px] -translate-x-12 bg-slate-900/40 backdrop-blur-3xl border border-indigo-500/30 rounded-full h-16 transition-all hover:scale-105 active:scale-95 animate-float-x"><div className="flex items-center gap-4 px-6 h-full"><div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white border border-white/20 shadow-[0_0_15px_rgba(79,70,229,0.8)]"><Sword size={18} /></div><span className="text-xs font-black text-white uppercase italic tracking-widest drop-shadow-md text-glow-indigo">HOST ARENA</span></div></button>
+            <button disabled={loading} onClick={() => createGame(true)} className="w-[220px] translate-x-12 bg-slate-900/40 backdrop-blur-3xl border border-emerald-500/30 rounded-full h-16 transition-all hover:scale-105 active:scale-95 animate-float-x-delayed"><div className="flex items-center gap-4 px-6 h-full"><div className="w-9 h-9 bg-emerald-600 rounded-xl flex items-center justify-center text-white border border-white/20 shadow-[0_0_15px_rgba(16,185,129,0.8)]"><Bot size={18} /></div><span className="text-xs font-black text-white uppercase italic tracking-widest drop-shadow-md text-glow-emerald">BATTLE WITH AI</span></div></button>
             <div className="w-full max-w-[310px] mt-6 group/join animate-in slide-in-from-bottom-8 duration-700">
               <div className="relative p-[1.5px] rounded-[2.5rem] bg-gradient-to-tr from-indigo-500 via-white/20 to-indigo-400 shadow-2xl">
                 <div className="bg-[#0a0f1e]/95 rounded-[2.4rem] p-6 flex flex-col gap-4">
-                  <div className="flex items-center gap-2 mb-0.5 px-1">
-                    <div className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-pulse shadow-[0_0_15px_#818cf8]" />
-                    <h3 className="text-[10px] font-black text-indigo-200 uppercase tracking-[0.4em]">Join Arena</h3>
-                  </div>
+                  <div className="flex items-center gap-2 mb-0.5 px-1"><div className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-pulse shadow-[0_0_15px_#818cf8]" /><h3 className="text-[10px] font-black text-indigo-200 uppercase tracking-[0.4em]">Join Arena</h3></div>
                   <div className="relative flex items-center">
-                    <input 
-                      type="text" 
-                      maxLength={4} 
-                      value={inputCode} 
-                      onChange={(e) => setInputCode(e.target.value.replace(/\D/g, ''))} 
-                      placeholder="CODE" 
-                      className="w-full bg-[#020617]/90 rounded-[1.8rem] border border-white/10 px-6 pr-14 py-4 text-white font-black tracking-[0.5em] outline-none focus:border-indigo-400" 
-                    />
-                    <button 
-                      onClick={joinGame} 
-                      disabled={loading || inputCode.length !== 4} 
-                      className={`absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-2xl flex items-center justify-center border border-white/20 transition-all ${inputCode.length === 4 ? 'bg-indigo-500 text-white shadow-lg' : 'bg-slate-900 text-slate-700 opacity-60'}`}
-                    >
-                      {loading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={18} strokeWidth={4} />}
-                    </button>
+                    <input type="text" maxLength={4} value={inputCode} onChange={(e) => setInputCode(e.target.value.replace(/\D/g, ''))} placeholder="CODE" className="w-full bg-[#020617]/90 rounded-[1.8rem] border border-white/10 px-6 pr-14 py-4 text-white font-black tracking-[0.5em] outline-none focus:border-indigo-400" />
+                    <button onClick={joinGame} disabled={loading || inputCode.length !== 4} className={`absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-2xl flex items-center justify-center border border-white/20 transition-all ${inputCode.length === 4 ? 'bg-indigo-500 text-white shadow-lg' : 'bg-slate-900 text-slate-700 opacity-60'}`}>{loading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={18} strokeWidth={4} />}</button>
                   </div>
                 </div>
               </div>
@@ -656,23 +564,19 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
     );
   }
 
-  const hostCoords = getCellCoords(visualHostPos);
-  const guestCoords = getCellCoords(visualGuestPos);
-  const sameCell = visualHostPos === visualGuestPos;
-
-  const isMyTurn = (game.turn === 'host' && game.hostId === myProfile?.uniqueId) || 
-                   (game.turn === 'guest' && game.guestId === myProfile?.uniqueId);
+  const hostCoords = getCellCoords(visualHostPos), guestCoords = getCellCoords(visualGuestPos), sameCell = visualHostPos === visualGuestPos;
+  const isMyTurn = (game.turn === 'host' && game.hostId === myProfile?.uniqueId) || (game.turn === 'guest' && game.guestId === myProfile?.uniqueId);
   const isRollButtonDisabled = !isMyTurn || rolling || isAnimating || !game.guestId;
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-slate-950 text-white overflow-hidden relative pb-32">
+    <div className="flex flex-col h-[100dvh] bg-slate-950 text-white overflow-hidden relative">
       <div className="px-6 py-4 flex items-center justify-between border-b border-white/10 bg-slate-900/50 backdrop-blur-md z-[50]">
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
             <Sword size={12} className="text-amber-400" />
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-400 animate-pulse text-glow-yellow">Arena #{game.code}</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-400 animate-pulse drop-shadow-[0_0_8px_rgba(250,204,21,0.5)]">Arena #{game.code}</span>
           </div>
-          <p className="text-[7px] font-black text-indigo-400/90 uppercase tracking-[0.15em] animate-pulse mt-1">SET FAV STICKERS IN PROFILE TO REACT!</p>
+          <p className="text-[7px] font-black text-indigo-400/90 uppercase tracking-[0.15em] animate-pulse mt-1">SET FAV STICKERS IN PROFILE TAB!</p>
         </div>
         <div className="flex items-center gap-3">
           <button onClick={() => setIsMuted(!isMuted)} className="p-2 bg-slate-800 rounded-lg border border-white/10 active:scale-90">{isMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}</button>
@@ -680,16 +584,29 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col items-center">
+      <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col items-center relative">
+        {visibleBanner && !isChatOpen && (
+          <div className="absolute top-2 left-4 right-4 z-[600] animate-in slide-in-from-top-4 duration-500">
+            <div className="bg-slate-900/90 backdrop-blur-2xl border border-indigo-500/50 px-4 py-3 rounded-2xl flex items-center gap-3 shadow-[0_10px_40px_rgba(0,0,0,0.8)] ring-1 ring-white/10">
+              <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-[10px] font-black border border-white/20 shadow-lg">{visibleBanner.sender.charAt(0).toUpperCase()}</div>
+              <div className="flex-1">
+                <p className="text-[8px] font-black text-indigo-400 uppercase tracking-widest leading-none mb-1">@{visibleBanner.sender}</p>
+                <p className="text-xs font-bold text-white leading-tight">{visibleBanner.text}</p>
+              </div>
+              <button onClick={() => setVisibleBanner(null)} className="p-1 text-slate-500 hover:text-white"><X size={14} /></button>
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-center items-center gap-3 mb-6 mt-6 sticky top-0 z-[400] w-full">
            <div className={`px-2 py-1.5 rounded-xl border flex flex-col items-center min-w-[95px] relative transition-all duration-300 ${currentVisualTurn === 'host' ? 'bg-indigo-600 border-white scale-105 shadow-[0_0_15px_rgba(79,70,229,0.4)]' : 'bg-slate-800 border-white/10 opacity-80'}`}>
-              <ReactionBubble text={game.hostReaction?.split('|')[0] || ''} visible={!!game.hostReaction && Date.now() - parseInt(game.hostReaction.split('|')[1] || '0') < ECHO_DURATION} />
+              <ReactionBubble reactionStr={game.hostReaction || ''} visible={!!game.hostReaction && Date.now() - parseInt(game.hostReaction.split('|')[1] || '0') < ECHO_DURATION} />
               {currentVisualTurn === 'host' && !game.winner && game.guestId && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white text-indigo-700 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-lg ring-2 ring-indigo-500/50 z-[20] animate-in slide-in-from-top-2"><Clock size={10} strokeWidth={3} className="animate-pulse" /><span className="text-[8px] font-black tabular-nums">{timeLeft}s</span></div>}
               <span className="text-base font-black text-white leading-none">{game.hostLastDice || '-'}</span>
               <span className="text-[8px] font-black uppercase tracking-widest truncate max-w-[70px] mt-0.5">{game.hostId}</span>
            </div>
            <div className={`px-2 py-1.5 rounded-xl border flex flex-col items-center min-w-[95px] relative transition-all duration-300 ${currentVisualTurn === 'guest' ? 'bg-emerald-600 border-white scale-105 shadow-[0_0_15px_rgba(16,185,129,0.4)]' : 'bg-slate-800 border-white/10 opacity-80'}`}>
-              <ReactionBubble text={game.guestReaction?.split('|')[0] || ''} visible={!!game.guestReaction && Date.now() - parseInt(game.guestReaction.split('|')[1] || '0') < ECHO_DURATION} />
+              <ReactionBubble reactionStr={game.guestReaction || ''} visible={!!game.guestReaction && Date.now() - parseInt(game.guestReaction.split('|')[1] || '0') < ECHO_DURATION} />
               {currentVisualTurn === 'guest' && !game.winner && game.guestId && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white text-emerald-700 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-lg ring-2 ring-emerald-500/50 z-[20] animate-in slide-in-from-top-2"><Clock size={10} strokeWidth={3} className="animate-pulse" /><span className="text-[8px] font-black tabular-nums">{timeLeft}s</span></div>}
               <span className="text-base font-black text-white leading-none">{game.guestLastDice || '-'}</span>
               <span className="text-[8px] font-black uppercase tracking-widest truncate max-w-[70px] mt-0.5">{game.guestId || 'WAITING'}</span>
@@ -701,11 +618,8 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
           {game.winner && <BoardCelebration winnerName={game.winner} isMe={game.winner === myProfile?.uniqueId} />}
           <svg className="absolute inset-0 pointer-events-none z-[40] w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
             {Object.entries(LADDERS).map(([start, end]) => {
-              const s = getCellCoords(parseInt(start)), e = getCellCoords(end);
-              const dx = e.x - s.x, dy = e.y - s.y, dist = Math.sqrt(dx * dx + dy * dy);
-              const px = -dy / dist, py = dx / dist;
-              const rungCount = Math.max(3, Math.floor(dist / 6));
-              const rungSteps = Array.from({ length: rungCount }, (_, i) => (i + 1) / (rungCount + 1));
+              const s = getCellCoords(parseInt(start)), e = getCellCoords(end), dx = e.x - s.x, dy = e.y - s.y, dist = Math.sqrt(dx * dx + dy * dy), px = -dy / dist, py = dx / dist;
+              const rungCount = Math.max(3, Math.floor(dist / 6)), rungSteps = Array.from({ length: rungCount }, (_, i) => (i + 1) / (rungCount + 1));
               return (
                 <g key={`ladder-${start}`} className="drop-shadow-lg">
                   <line x1={s.x + px*0.8} y1={s.y + py*0.8} x2={e.x + px*0.8} y2={e.y + py*0.8} stroke="#fbbf24" strokeWidth="0.8" strokeLinecap="round" />
@@ -715,50 +629,100 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
               );
             })}
             {Object.entries(SNAKES).map(([start, end], idx) => {
-              const s = getCellCoords(parseInt(start)), e = getCellCoords(end), colors = CARTOON_SNAKES[idx % CARTOON_SNAKES.length];
-              const { d, firstCP } = generateWigglyPath(s, e, idx);
-              const angle = Math.atan2(firstCP.y - s.y, firstCP.x - s.x) * (180 / Math.PI);
+              const s = getCellCoords(parseInt(start)), e = getCellCoords(end), colors = CARTOON_SNAKES[idx % CARTOON_SNAKES.length], { d, firstCP } = generateWigglyPath(s, e, idx), angle = Math.atan2(firstCP.y - s.y, firstCP.x - s.x) * (180 / Math.PI);
               return (
                 <g key={`snake-${start}`} className="drop-shadow-md">
                   <path d={d} fill="none" stroke={colors.body} strokeWidth="1.2" strokeLinecap="round" />
                   <path d={d} fill="none" stroke={colors.stripe} strokeWidth="1.2" strokeLinecap="butt" strokeDasharray="3 4" opacity="0.8" />
-                  <g transform={`translate(${s.x}, ${s.y}) rotate(${angle})`}>
-                    <ellipse cx="0.8" cy="0" rx="2.2" ry="1.4" fill={colors.body} />
-                    <circle cx="1.5" cy="-0.6" r="0.3" fill="black" />
-                    <circle cx="1.5" cy="0.6" r="0.3" fill="black" />
-                  </g>
+                  <g transform={`translate(${s.x}, ${s.y}) rotate(${angle})`}><ellipse cx="0.8" cy="0" rx="2.2" ry="1.4" fill={colors.body} /><circle cx="1.5" cy="-0.6" r="0.3" fill="black" /><circle cx="1.5" cy="0.6" r="0.3" fill="black" /></g>
                 </g>
               );
             })}
           </svg>
           <div className="absolute inset-0 z-[60] pointer-events-none">
-            <div className="absolute w-8 h-8 transition-all duration-300 ease-out" style={{ left: `${sameCell ? hostCoords.x - 2.5 : hostCoords.x}%`, top: `${hostCoords.y}%`, transform: 'translate(-50%, -85%)' }}>
-               <Pawn color="#4f46e5" isBitten={isSpecialMove === 'host' && visualHostPos < (game.hostLandingPos || visualHostPos)} isHopping={isHopping === 'host'} />
-            </div>
-            <div className="absolute w-8 h-8 transition-all duration-300 ease-out" style={{ left: `${sameCell ? guestCoords.x + 2.5 : guestCoords.x}%`, top: `${guestCoords.y}%`, transform: 'translate(-50%, -85%)' }}>
-               <Pawn color="#10b981" isBitten={isSpecialMove === 'guest' && visualGuestPos < (game.guestLandingPos || visualGuestPos)} isHopping={isHopping === 'guest'} />
-            </div>
+            <div className="absolute w-8 h-8 transition-all duration-300 ease-out" style={{ left: `${sameCell ? hostCoords.x - 2.5 : hostCoords.x}%`, top: `${hostCoords.y}%`, transform: 'translate(-50%, -85%)' }}><Pawn color="#4f46e5" isBitten={isSpecialMove === 'host' && visualHostPos < (game.hostLandingPos || visualHostPos)} isHopping={isHopping === 'host'} /></div>
+            <div className="absolute w-8 h-8 transition-all duration-300 ease-out" style={{ left: `${sameCell ? guestCoords.x + 2.5 : guestCoords.x}%`, top: `${guestCoords.y}%`, transform: 'translate(-50%, -85%)' }}><Pawn color="#10b981" isBitten={isSpecialMove === 'guest' && visualGuestPos < (game.guestLandingPos || visualGuestPos)} isHopping={isHopping === 'guest'} /></div>
           </div>
         </div>
       </div>
 
-      <div className="fixed bottom-[110px] left-0 right-0 px-8 z-[150] flex flex-col items-center">
+      <div className="fixed bottom-[110px] left-0 right-0 px-4 z-[150] flex flex-col items-center gap-4">
         {game.winner ? (
           <button onClick={() => setGame(null)} className="w-full max-w-[280px] bg-white text-black font-black py-4 rounded-2xl shadow-xl active:scale-95 uppercase tracking-widest text-xs ring-2 ring-indigo-500/50 flex items-center justify-center gap-3"><LogOut size={18} /> Back to Lobby</button>
         ) : (
-          <div className="flex flex-col items-center gap-4 w-full max-sm:w-full max-w-sm">
+          <div className="flex flex-col items-center gap-4 w-full max-w-sm">
             {game.guestId && (
-              <div className="flex flex-col items-center gap-3 w-full">
-                <div className="flex gap-2 p-1.5 bg-slate-900/60 backdrop-blur-2xl border border-white/20 rounded-[2rem] shadow-2xl px-3 overflow-x-auto no-scrollbar">
-                  {REACTIONS.map(r => (<button key={r.label} onClick={() => sendEcho(r.icon)} className="w-10 h-10 shrink-0 flex items-center justify-center rounded-2xl bg-slate-800 border border-white/5 active:scale-90"><span className="text-lg">{r.icon}</span></button>))}
-                  {favStickers.length > 0 && <div className="flex gap-2 border-l border-white/10 pl-2">{favStickers.map(s => (<button key={s.id} onClick={() => sendEcho(s.image)} className="w-10 h-10 shrink-0 flex items-center justify-center rounded-2xl bg-slate-800 border border-white/5 active:scale-90"><img src={s.image} className="w-7 h-7 object-contain" alt={s.name} /></button>))}</div>}
+              <div className="flex items-center justify-between w-full px-2 gap-3">
+                {/* Minimal Chat Button - Small Size */}
+                <button 
+                  onClick={() => setIsChatOpen(true)}
+                  className="w-8 h-8 rounded-lg bg-indigo-600 border border-white/20 flex items-center justify-center text-white shadow-lg active:scale-90 relative transition-transform hover:scale-105"
+                >
+                  <MessageCircle size={14} />
+                  {visibleBanner && <div className="absolute -top-1 -right-1 w-2 h-2 bg-rose-500 rounded-full border border-white animate-bounce" />}
+                </button>
+
+                {/* Reaction Bar */}
+                <div className="flex-1 flex gap-1.5 p-1 bg-slate-900/80 backdrop-blur-2xl border border-white/10 rounded-xl shadow-xl overflow-x-auto no-scrollbar items-center px-2">
+                  {REACTIONS.map(r => (<button key={r.label} onClick={() => sendEcho(r.icon)} className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg bg-slate-800 border border-white/5 active:scale-90"><span className="text-base">{r.icon}</span></button>))}
+                  {favStickers.length > 0 && <div className="flex gap-1.5 border-l border-white/10 pl-1.5">{favStickers.map(s => (<button key={s.id} onClick={() => sendEcho(s.image)} className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg bg-slate-800 border border-white/5 active:scale-90"><img src={s.image} className="w-6 h-6 object-contain" alt={s.name} /></button>))}</div>}
                 </div>
+
+                {/* Dice Button */}
+                <button 
+                  disabled={isRollButtonDisabled} 
+                  onClick={rollDice} 
+                  className={`w-14 h-14 rounded-2xl transition-all active:scale-90 relative ${isRollButtonDisabled ? 'opacity-40 grayscale' : 'hover:scale-110 shadow-lg'}`}
+                >
+                  <IsometricDie value={rolling ? rollingDiceValue : (game.lastDice || 1)} rolling={rolling} />
+                  {isMyTurn && game.guestId && !rolling && !isAnimating && <div className="absolute -top-1 -right-1 w-5 h-5 bg-emerald-600 rounded-full flex items-center justify-center border-2 border-white animate-pulse"><Sparkles size={10} className="text-white" /></div>}
+                </button>
               </div>
             )}
-            <button disabled={isRollButtonDisabled} onClick={rollDice} className={`w-16 h-16 rounded-[1.25rem] transition-all active:scale-90 relative ${isRollButtonDisabled ? 'opacity-40 grayscale' : 'hover:scale-110 shadow-lg'}`}><IsometricDie value={rolling ? rollingDiceValue : (game.lastDice || 1)} rolling={rolling} />{isMyTurn && game.guestId && !rolling && !isAnimating && <div className="absolute -top-1 -right-1 w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center border-2 border-white animate-pulse"><Sparkles size={10} className="text-white" /></div>}</button>
           </div>
         )}
       </div>
+
+      {/* Composing Drawer - Strictly for typing */}
+      {isChatOpen && (
+        <>
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] z-[400] animate-in fade-in duration-300" onClick={() => setIsChatOpen(false)} />
+          <div className="fixed bottom-0 left-0 right-0 h-[160px] bg-slate-900 border-t border-white/20 rounded-t-[2.5rem] z-[450] shadow-2xl flex flex-col animate-in slide-in-from-bottom-full duration-500 ring-1 ring-white/10">
+            <div className="px-6 pt-4 pb-1 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-black border border-white/20">
+                  <MessageCircle size={12} />
+                </div>
+                <h3 className="text-[9px] font-black text-white uppercase tracking-[0.2em]">Quick Composed Message</h3>
+              </div>
+              <button onClick={() => setIsChatOpen(false)} className="p-1.5 bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-all active:scale-90">
+                <ChevronDown size={16} />
+              </button>
+            </div>
+            
+            <div className="p-5 bg-slate-900">
+              <div className="bg-slate-950 border border-white/10 rounded-2xl p-1.5 flex gap-2 items-center shadow-inner ring-1 ring-white/5">
+                <input 
+                  autoFocus
+                  type="text" 
+                  value={chatText} 
+                  onChange={(e) => setChatText(e.target.value)} 
+                  onKeyDown={(e) => e.key === 'Enter' && sendChatMessage()}
+                  placeholder="Enter message..."
+                  className="flex-1 bg-transparent px-4 py-3 text-sm font-bold outline-none text-white placeholder:text-slate-700"
+                />
+                <button 
+                  onClick={sendChatMessage} 
+                  disabled={!chatText.trim()}
+                  className="w-12 h-12 flex items-center justify-center bg-indigo-600 text-white rounded-xl active:scale-90 disabled:opacity-50 transition-all shadow-lg shadow-indigo-900/40"
+                >
+                  <Send size={18} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };
