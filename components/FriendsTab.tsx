@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Friend, UserProfile, ChatMessage } from '../types';
 import { dbService } from '../services/dbService';
 import { UserPlus, MessageCircle, ArrowLeft, Send, Users, Bell, Loader2, Search, Trash2, Frown, X, CheckCircle2, AlertCircle, Trophy, Swords, TrendingUp, Sparkles, User } from 'lucide-react';
@@ -45,44 +45,8 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
     isAtBottomRef.current = scrollHeight - scrollTop - clientHeight < 100;
   };
 
-  useEffect(() => {
-    refreshFriends();
-    const interval = setInterval(refreshFriends, 5000);
-    return () => clearInterval(interval);
-  }, [myProfile.name, activeChat?.uniqueId]);
-
-  useEffect(() => {
-    if (activeChat) {
-      const now = Date.now();
-      setLastReadTimes(prev => {
-        const next = { ...prev, [activeChat.uniqueId]: now };
-        localStorage.setItem(`read_times_${myProfile.uniqueId}`, JSON.stringify(next));
-        return next;
-      });
-
-      if (isAtBottomRef.current) {
-        scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }
-    }
-  }, [messages]);
-
-  useEffect(() => {
-    if (activeChat) {
-      isAtBottomRef.current = true;
-      setTimeout(() => {
-        scrollRef.current?.scrollIntoView({ behavior: 'auto' });
-      }, 50);
-    }
-  }, [activeChat?.uniqueId]);
-
-  useEffect(() => {
-    if (feedback) {
-      const t = setTimeout(() => setFeedback(null), 3000);
-      return () => clearTimeout(t);
-    }
-  }, [feedback]);
-
-  const refreshFriends = async () => {
+  const refreshFriends = useCallback(async () => {
+    if (document.hidden) return;
     try {
       const list = await dbService.getFriends(myProfile.name);
       const friendsWithMeta = await Promise.all(list.map(async (f) => {
@@ -103,7 +67,53 @@ const FriendsTab: React.FC<FriendsTabProps> = ({ myProfile }) => {
          }
       }
     } catch (e) { console.debug("Sync error..."); }
-  };
+  }, [myProfile.name, activeChat?.uniqueId, lastReadTimes, messages.length]);
+
+  useEffect(() => {
+    refreshFriends();
+    const interval = setInterval(refreshFriends, 5000);
+    
+    const handleVisibilitySync = () => {
+      if (!document.hidden) refreshFriends();
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilitySync);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilitySync);
+    };
+  }, [refreshFriends]);
+
+  useEffect(() => {
+    if (activeChat) {
+      const now = Date.now();
+      setLastReadTimes(prev => {
+        const next = { ...prev, [activeChat.uniqueId]: now };
+        localStorage.setItem(`read_times_${myProfile.uniqueId}`, JSON.stringify(next));
+        return next;
+      });
+
+      if (isAtBottomRef.current) {
+        scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  }, [messages, activeChat?.uniqueId, myProfile.uniqueId]);
+
+  useEffect(() => {
+    if (activeChat) {
+      isAtBottomRef.current = true;
+      setTimeout(() => {
+        scrollRef.current?.scrollIntoView({ behavior: 'auto' });
+      }, 50);
+    }
+  }, [activeChat?.uniqueId]);
+
+  useEffect(() => {
+    if (feedback) {
+      const t = setTimeout(() => setFeedback(null), 3000);
+      return () => clearTimeout(t);
+    }
+  }, [feedback]);
 
   const handleShowFriendStats = async () => {
     if (!activeChat) return;

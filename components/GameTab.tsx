@@ -272,6 +272,7 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
     if (!game || !game.guestId || game.isBotGame || !myProfile) return;
     const opponentId = game.hostId === myProfile.uniqueId ? game.guestId : game.hostId;
     const interval = setInterval(async () => {
+      if (document.hidden) return;
       try {
         const messages = await dbService.getMessages(myProfile.uniqueId, opponentId);
         if (messages.length > 0) {
@@ -298,7 +299,7 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
        setVisualGuestPos(game.guestPos);
        setCurrentVisualTurn(game.turn); 
     }
-  }, [game?.id]);
+  }, [game?.id, isAnimating]);
 
   useEffect(() => {
     if (feedback) {
@@ -341,7 +342,7 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
       }
     };
     handleTimeout();
-  }, [timeLeft, game?.winner, myProfile?.uniqueId, playSound, rolling, isAnimating]);
+  }, [timeLeft, game, myProfile?.uniqueId, playSound, rolling, isAnimating, setGame]);
 
   useEffect(() => {
     if (game && game.isBotGame && game.guestId === "FoxyBot" && game.turn === "guest" && !game.winner && !rolling && !isAnimating) {
@@ -413,12 +414,13 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
       else if (visualGuestPos !== targetGuest) moveStep(visualGuestPos, landGuest, targetGuest, 'guest', setVisualGuestPos);
     }, 50);
     return () => clearTimeout(timer);
-  }, [visualHostPos, visualGuestPos, game?.hostPos, game?.guestPos, game?.hostLandingPos, game?.guestLandingPos, game?.lastDice, game?.hostLastDice, game?.guestLastDice, game?.turn, game?.winner, isHopping, isSpecialMove, rolling, playSound, isAnimating, myProfile]);
+  }, [visualHostPos, visualGuestPos, game, isHopping, isSpecialMove, rolling, playSound, isAnimating, myProfile]);
 
   useEffect(() => {
     let interval: any;
     if (game && myProfile && !game.isBotGame) {
-      interval = setInterval(async () => {
+      const syncGame = async () => {
+        if (document.hidden) return;
         try {
           const remote = await dbService.getGameByCode(game.code);
           if (!remote) { setGame(null); return; }
@@ -433,10 +435,20 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
             setGame(remote);
           }
         } catch (e) {}
-      }, SYNC_INTERVAL);
+      };
+      
+      interval = setInterval(syncGame, SYNC_INTERVAL);
+      
+      const handleVisibilityChange = () => {
+        if (!document.hidden) syncGame();
+      };
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      return () => {
+        clearInterval(interval);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
     }
-    return () => clearInterval(interval);
-  }, [game?.id, game?.code, myProfile?.uniqueId, playSound]);
+  }, [game?.id, game?.code, myProfile?.uniqueId, playSound, setGame]);
 
   const sendEcho = async (icon: string) => {
     if (!game || !myProfile) return;
@@ -551,7 +563,7 @@ const GameTab: React.FC<GameTabProps> = ({ myProfile, game, setGame, onProfileUp
                 <div className="bg-[#0a0f1e]/95 rounded-[2.4rem] p-6 flex flex-col gap-4">
                   <div className="flex items-center gap-2 mb-0.5 px-1"><div className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-pulse shadow-[0_0_15px_#818cf8]" /><h3 className="text-[10px] font-black text-indigo-200 uppercase tracking-[0.4em]">Join Arena</h3></div>
                   <div className="relative flex items-center">
-                    <input type="text" maxLength={4} value={inputCode} onChange={(e) => setInputCode(e.target.value.replace(/\D/g, ''))} placeholder="CODE" className="w-full bg-[#020617]/90 rounded-[1.8rem] border border-white/10 px-6 pr-14 py-4 text-white font-black tracking-[0.5em] outline-none focus:border-indigo-400" />
+                    <input type="text" maxLength={4} value={inputCode} onChange={(e) => setInputCode(e.target.value.replace(/\D/g, ''))} placeholder="CODE" className="w-full bg-[#020617]/90 rounded-[1.8rem] border border-white/10 px-6 pr-14 py-4 text-white font-black tracking-[0.5em] outline-none focus:border-indigo-500 transition-all tracking-wider shadow-inner" />
                     <button onClick={joinGame} disabled={loading || inputCode.length !== 4} className={`absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-2xl flex items-center justify-center border border-white/20 transition-all ${inputCode.length === 4 ? 'bg-indigo-500 text-white shadow-lg' : 'bg-slate-900 text-slate-700 opacity-60'}`}>{loading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={18} strokeWidth={4} />}</button>
                   </div>
                 </div>

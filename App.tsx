@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Tab, UserProfile, GameState } from './types';
 import { dbService } from './services/dbService';
 import ProfileTab from './components/ProfileTab';
@@ -36,20 +36,43 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const runStatusCheck = useCallback(async () => {
+    if (!myProfile?.name || document.hidden) return;
+    try {
+      await dbService.updateLastSeen(myProfile.name);
+      const count = await dbService.getPendingRequestCount(myProfile.name);
+      setPendingRequests(count);
+      
+      if (activeTab !== Tab.FRIENDS) { 
+        const msgCount = await dbService.getNewMessageCount(myProfile.name, lastCheckTime);
+        if (msgCount > 0) setHasNewMessages(true); 
+      } else { 
+        setHasNewMessages(false); 
+        setLastCheckTime(Date.now()); 
+      }
+    } catch (e) {}
+  }, [myProfile?.name, activeTab, lastCheckTime]);
+
   useEffect(() => {
     if (!myProfile?.name) return;
-    const check = async () => {
-      try {
-        await dbService.updateLastSeen(myProfile.name);
-        setPendingRequests(await dbService.getPendingRequestCount(myProfile.name));
-        if (activeTab !== Tab.FRIENDS) { 
-          if (await dbService.getNewMessageCount(myProfile.name, lastCheckTime) > 0) setHasNewMessages(true); 
-        }
-        else { setHasNewMessages(false); setLastCheckTime(Date.now()); }
-      } catch (e) {}
+    
+    // Initial check
+    runStatusCheck();
+    
+    // Regular polling
+    const interval = setInterval(runStatusCheck, 10000);
+    
+    // Visibility listener for immediate sync on return
+    const handleVisibilityChange = () => {
+      if (!document.hidden) runStatusCheck();
     };
-    check(); const interval = setInterval(check, 10000); return () => clearInterval(interval);
-  }, [myProfile?.name, activeTab, lastCheckTime]);
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [runStatusCheck, myProfile?.name]);
 
   const renderProfileRequired = (title: string, description: string, icon: React.ReactElement<any>, tabType: Tab) => (
     <div className="relative flex flex-col items-center justify-center h-[100dvh] p-8 text-center animate-in fade-in zoom-in-95 bg-slate-950 overflow-hidden">
